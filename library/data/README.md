@@ -17,4 +17,7 @@
 
 ## 注意
 - speaker_id 一律匿名化（spk01…），不輸出 Common Voice client_id
+- MP3 由 soundfile（libsndfile ≥ 1.1）直接解碼，不需要 ffmpeg；重取樣用 librosa（soxr_hq）
+- manifest 的 wav_path 為相對於專案根目錄的 posix 路徑（Windows 與 Jetson 通用）
+- 抽樣先依 path 排序再以 seed 打亂，結果與 TSV 列順序無關；某位說話者的候選句時長不符時會改試同一人的下一句
 - 新增資料集：新增一個讀取檔（例如 mslt.py），輸出相同欄位的 DataFrame 即可

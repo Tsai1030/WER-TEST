@@ -2,6 +2,9 @@
 
 import logging
 
+_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
+_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
 
 def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
     """設定全域 log 格式；應在 scripts/ 的入口呼叫一次。
@@ -13,7 +16,14 @@ def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
     例外:
         ValueError: level 不合法。
     """
-    raise NotImplementedError
+    levels = logging.getLevelNamesMapping()
+    if level.upper() not in levels:
+        raise ValueError(f"不合法的 log 等級：{level}")
+    numeric = levels[level.upper()]
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if log_file is not None:
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+    logging.basicConfig(level=numeric, format=_FORMAT, datefmt=_DATEFMT, handlers=handlers, force=True)
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -25,4 +35,4 @@ def get_logger(name: str) -> logging.Logger:
     回傳:
         logging.Logger。
     """
-    raise NotImplementedError
+    return logging.getLogger(name)

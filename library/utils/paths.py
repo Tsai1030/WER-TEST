@@ -6,6 +6,8 @@
 
 from pathlib import Path
 
+_ROOT_MARKER = "pyproject.toml"
+
 
 def project_root() -> Path:
     """回傳專案根目錄（含 pyproject.toml 的資料夾）。
@@ -16,7 +18,11 @@ def project_root() -> Path:
     例外:
         RuntimeError: 找不到專案根目錄。
     """
-    raise NotImplementedError
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / _ROOT_MARKER).is_file():
+            return parent
+    raise RuntimeError(f"找不到專案根目錄（往上找不到 {_ROOT_MARKER}）：{here}")
 
 
 def resolve_path(path: str | Path) -> Path:
@@ -28,19 +34,20 @@ def resolve_path(path: str | Path) -> Path:
     回傳:
         絕對路徑（不檢查是否存在）。
     """
-    raise NotImplementedError
+    p = Path(path)
+    return p if p.is_absolute() else project_root() / p
 
 
 def configs_dir() -> Path:
     """回傳 configs/ 資料夾路徑。"""
-    raise NotImplementedError
+    return project_root() / "configs"
 
 
 def data_dir() -> Path:
     """回傳 data/ 資料夾路徑。"""
-    raise NotImplementedError
+    return project_root() / "data"
 
 
 def results_dir() -> Path:
     """回傳 results/ 資料夾路徑。"""
-    raise NotImplementedError
+    return project_root() / "results"
