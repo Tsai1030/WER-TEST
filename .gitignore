@@ -1,0 +1,19 @@
+# 資料：Common Voice 條款禁止重新散佈，data/ 下只有 README.md 進版控
+data/*
+!data/README.md
+
+# 環境與快取
+.venv/
+.uv_cache/
+.hf_cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# results/ 中的大型檔案（--save-processed 輸出的音檔）
+results/**/*.wav
+results/**/processed/
+
+# 注意：uv.lock 必須進版控，不可加入此清單

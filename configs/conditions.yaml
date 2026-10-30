@@ -1,0 +1,10 @@
+noise_source: data/noise/source        # DEMAND 16kHz 數個環境，或機器人本體錄音
+conditions:
+  clean:   {}
+  snr20:   { type: noise, snr_db: 20 }
+  snr10:   { type: noise, snr_db: 10 }
+  snr05:   { type: noise, snr_db: 5 }
+  snr00:   { type: noise, snr_db: 0 }
+  reverb:  { type: reverb, rt60: 0.6, room_dim: [5.0, 4.0, 3.0], src_mic_distance: 2.5 }
+  lowvol:  { type: volume, gain_db: -20 }
+  noise_only: { type: noise_only, n_clips: 10, clip_sec: 5.0 }

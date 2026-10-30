@@ -1,0 +1,39 @@
+name: round1
+seed: 42
+device: cpu          # Jetson 上改為 cuda
+dtype: fp32          # Jetson 上改為 fp16
+num_threads: 4
+
+paths:
+  raw:                                 # 依 tar -tzf 結果確認實際路徑
+    female: data/raw/female
+    male: data/raw/male
+  manifest: data/clean/manifest.csv
+  degraded_dir: data/degraded
+  output_dir: results/round1
+
+sampling:
+  tsv_name: test.tsv
+  n_per_gender: 25
+  min_sec: 3.0
+  max_sec: 8.0
+  min_words: 5
+  max_down_votes: 0
+  one_per_speaker: true
+
+models:
+  - granite-470m
+  # - parakeet-tdt-v2   # 暫緩：需 Linux 環境（NeMo）
+  - whisper-turbo
+  - qwen3-asr-0.6b
+
+methods:
+  - baseline
+  - vad
+  - denoise
+  - vad+denoise
+
+conditions: [clean, snr20, snr10, snr05, snr00, reverb, lowvol, noise_only]
+
+normalizer: english
+save_processed: false

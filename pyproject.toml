@@ -1,0 +1,40 @@
+[project]
+name = "stt-wer-bench"
+version = "0.1.0"
+description = "STT WER 錯誤分析與改善（Round 1：英文）"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "numpy", "pandas", "soundfile", "librosa", "pyyaml", "jiwer", "psutil", "tqdm",
+  "torch", "torchaudio", "transformers",
+]
+
+[project.optional-dependencies]
+audio  = ["pyroomacoustics", "pyloudnorm", "silero-vad", "deepfilternet", "noisereduce"]
+models = ["qwen-asr", "faster-whisper"]
+
+[dependency-groups]
+dev = ["pytest", "ruff", "mypy"]
+
+[tool.uv.sources]
+torch      = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# 讓 uv sync 以 editable 方式安裝 library/，scripts/ 與 tests/ 才能 import library
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["library"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

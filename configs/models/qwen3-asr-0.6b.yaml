@@ -1,0 +1,10 @@
+name: qwen3-asr-0.6b
+enabled: true
+hf_id: Qwen/Qwen3-ASR-0.6B                 # 實際 HF ID 於 M0 確認
+framework: qwen-asr                        # transformers 後端
+backend: transformers
+architecture: audio-llm
+language: English
+decoding:
+  strategy: greedy
+# 備案：部署困難時改用 SenseVoice-Small（sherpa-onnx）

@@ -1,0 +1,4 @@
+name: denoise
+impl: deepfilternet      # Windows 安裝失敗時改為 noisereduce，並記錄於 meta.json
+fallback: noisereduce
+params: {}               # 使用實作預設值

@@ -1,0 +1,6 @@
+name: vad
+impl: silero
+threshold: 0.5
+min_speech_ms: 250
+min_silence_ms: 300
+pad_ms: 200          # 語音段前後保留，避免吃掉句首句尾

@@ -1,0 +1,7 @@
+name: granite-470m
+enabled: true
+hf_id: ibm-granite/granite-speech-5.0-470m-turboctc   # 實際 HF ID 於 M0 確認
+framework: transformers
+architecture: conformer-ctc
+decoding:
+  strategy: greedy

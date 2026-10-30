@@ -1,0 +1,3 @@
+name: loudnorm
+impl: pyloudnorm
+target_lufs: -23.0
