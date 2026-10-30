@@ -11,5 +11,5 @@ class IdentityMethod(AudioMethod):
     name = "baseline"
 
     def process(self, wav: np.ndarray, sr: int) -> np.ndarray:
-        """原樣回傳 wav。"""
-        raise NotImplementedError
+        """原樣回傳 wav（轉為 float32）。"""
+        return wav.astype(np.float32, copy=False)

@@ -18,16 +18,32 @@ class MethodChain(AudioMethod):
         例外:
             ValueError: methods 為空清單。
         """
-        raise NotImplementedError
+        if not methods:
+            raise ValueError("MethodChain 至少需要一個方法")
+        super().__init__({})
+        self.methods = list(methods)
+        self.name = "+".join(m.name for m in self.methods)
 
     def load(self, device: str = "cpu") -> None:
         """依序載入所有方法。"""
-        raise NotImplementedError
+        for m in self.methods:
+            m.load(device)
+        self.device = self.methods[0].device
 
     def process(self, wav: np.ndarray, sr: int) -> np.ndarray:
         """依序處理；遇到空陣列即停止並回傳空陣列。"""
-        raise NotImplementedError
+        out = wav
+        for m in self.methods:
+            out = m.process(out, sr)
+            if len(out) == 0:
+                return np.zeros(0, dtype=np.float32)
+        return out
 
     def unload(self) -> None:
         """依序釋放所有方法。"""
-        raise NotImplementedError
+        for m in self.methods:
+            m.unload()
+
+    def describe(self) -> dict:
+        """回傳組合名稱與各方法的設定。"""
+        return {"name": self.name, "steps": [m.describe() for m in self.methods]}

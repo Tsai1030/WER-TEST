@@ -15,6 +15,15 @@
 
 ---
 
+## 2026-10-30：M4 冒煙測試範圍與時間
+- 決定：`tests/test_smoke_pipeline.py` 預設只跑 granite-470m × 5 個方法（baseline、vad、denoise、loudnorm、vad+denoise）
+  × clean / noise_only，2 句 + 1 段純噪音；`SMOKE_ALL=1` 時跑 round1 全部模型 × 方法 × 條件，作為 M4 驗收。
+- 理由：plan 第 14 章要求冒煙測試 1 分鐘內完成，但 M4 驗收要求「2 句 × 全組合」，兩者無法同時滿足。
+  開發機實測光 import torch + transformers 約 20 秒、載入 granite 15–30 秒，預設版實測 62 秒，已是此機器的下限。
+- pytest 停用 faulthandler：Windows 上它會把 torch / torchaudio 原生程式碼內部已處理的例外印成
+  「Windows fatal exception: access violation」，測試結果正常，屬誤報。
+- 建議（選用）：將 `D:\stt test\.venv` 加入 Windows Defender 排除清單，可能縮短 import 時間。
+
 ## 2026-10-30：M2 噪音源與劣化條件細節
 - 噪音源：DEMAND 16kHz 版（CC BY 4.0，Thiemann, Ito, Vincent，doi:10.5281/zenodo.1227121），
   選 DKITCHEN、DLIVING、DWASHING、OOFFICE 四個室內環境，各取 ch01（300 秒）。

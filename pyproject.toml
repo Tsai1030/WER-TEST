@@ -46,6 +46,13 @@ packages = ["library"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Windows 上 faulthandler 會把 torch / torchaudio 原生程式碼內部已處理的例外印成
+# "Windows fatal exception: access violation"（誤報，測試仍正常完成），故停用
+addopts = "-p no:faulthandler"
+filterwarnings = [
+  "ignore::DeprecationWarning:silero_vad.*",
+  "ignore:`torch.jit.load` is deprecated:FutureWarning",
+]
 
 [tool.ruff]
 line-length = 100
