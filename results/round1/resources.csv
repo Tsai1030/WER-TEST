@@ -1,0 +1,13 @@
+model,method,peak_gpu_mb,peak_ram_mb,model_size_mb,load_time_s,gpu_measure
+granite-470m,baseline,,2284.4,902.5,27.6,none
+granite-470m,vad,,2342.4,902.5,27.6,none
+granite-470m,denoise,,2384.0,902.5,27.6,none
+granite-470m,vad+denoise,,2383.7,902.5,27.6,none
+whisper-small,baseline,,3915.3,922.2,2.55,none
+whisper-small,vad,,2115.9,922.2,2.55,none
+whisper-small,denoise,,2224.4,922.2,2.55,none
+whisper-small,vad+denoise,,2116.0,922.2,2.55,none
+qwen3-asr-0.6b,baseline,,3808.0,1492.4,5.96,none
+qwen3-asr-0.6b,vad,,3780.7,1492.4,5.96,none
+qwen3-asr-0.6b,denoise,,3804.2,1492.4,5.96,none
+qwen3-asr-0.6b,vad+denoise,,3771.1,1492.4,5.96,none
