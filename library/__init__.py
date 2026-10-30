@@ -48,7 +48,11 @@ def evaluate(ref: str, hyp: str, normalizer: str = "english") -> AlignmentResult
     例外:
         KeyError: normalizer 名稱未註冊。
     """
-    raise NotImplementedError
+    from library.scoring import align
+    from library.textnorm import get_normalizer
+
+    norm = get_normalizer(normalizer)
+    return align(norm(ref), norm(hyp))
 
 
 def run_experiment(config_path: str | Path) -> Path:

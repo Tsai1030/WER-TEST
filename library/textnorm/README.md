@@ -9,3 +9,11 @@
 
 ## 範例
     normalize("I don't know, uh, twenty-five.")  # → "i do not know 25"
+
+## 實作
+- 先套用 Whisper `EnglishTextNormalizer`（套件 whisper-normalizer）：已移除 hmm、mm、mhm、mmm、uh、um
+- 再移除 `EXTRA_FILLERS`（uhm、umm、uhh、erm、hm）；ah、er、oh 可能是一般詞彙，不移除
+
+## 已知特性
+- "oh" 會被當成數字轉為 "0"（例："oh I see" → "0 i see"）；ref 與 hyp 一致處理，不會造成假錯誤
+- 縮寫字母會拆開（"U.S.A." → "u s a"）、"Mr." → "mister"、"St." → "saint"

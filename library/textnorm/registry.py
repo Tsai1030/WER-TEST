@@ -2,6 +2,11 @@
 
 from collections.abc import Callable
 
+from library.textnorm.english import normalize_english
+
+_NORMALIZERS: dict[str, Callable[[str], str]] = {"english": normalize_english}
+_LANG_TO_NAME = {"en": "english"}
+
 
 def normalize(text: str, lang: str = "en") -> str:
     """英文：小寫、去標點、縮寫展開、數字統一、英美拼法統一、移除贅詞（uh, um…）。
@@ -16,7 +21,9 @@ def normalize(text: str, lang: str = "en") -> str:
     例外:
         KeyError: 不支援的語言。
     """
-    raise NotImplementedError
+    if lang not in _LANG_TO_NAME:
+        raise KeyError(f"不支援的語言：{lang}（可用：{list(_LANG_TO_NAME)}）")
+    return get_normalizer(_LANG_TO_NAME[lang])(text)
 
 
 def get_normalizer(name: str = "english") -> Callable[[str], str]:
@@ -31,4 +38,6 @@ def get_normalizer(name: str = "english") -> Callable[[str], str]:
     例外:
         KeyError: 名稱未註冊。
     """
-    raise NotImplementedError
+    if name not in _NORMALIZERS:
+        raise KeyError(f"未註冊的正規化器：{name}（可用：{list(_NORMALIZERS)}）")
+    return _NORMALIZERS[name]

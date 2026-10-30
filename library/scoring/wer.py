@@ -17,4 +17,10 @@ def corpus_wer(results: Iterable[AlignmentResult]) -> float:
     例外:
         ValueError: ΣN = 0（例如只有純噪音片段）。
     """
-    raise NotImplementedError
+    errors = n_words = 0
+    for r in results:
+        errors += r.errors
+        n_words += r.N
+    if n_words == 0:
+        raise ValueError("ΣN = 0，無法計算整體 WER（純噪音片段請改看幻覺率）")
+    return errors / n_words
