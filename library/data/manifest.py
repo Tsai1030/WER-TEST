@@ -80,6 +80,43 @@ def build_manifest(samples: pd.DataFrame, out_dir: Path) -> Path:
     return manifest
 
 
+def write_noise_entries(path: str | Path, entries: list[dict]) -> None:
+    """把純噪音片段寫入 manifest：先移除既有的 noise 列，再附加 entries（語音列不變）。
+
+    參數:
+        path: manifest.csv 路徑。
+        entries: 每段一個 dict，含 utt_id（noise01…）、wav_path（Path）、audio_sec、source_file
+            （噪音環境名稱）；ref_raw、speaker_id、gender、age 留空。
+
+    例外:
+        FileNotFoundError: manifest 不存在。
+        ValueError: utt_id 不是 noiseNN 格式。
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"manifest 不存在：{path}")
+    bad = [e["utt_id"] for e in entries if not _NOISE_ID.fullmatch(e["utt_id"])]
+    if bad:
+        raise ValueError(f"純噪音 utt_id 需為 noiseNN：{bad}")
+    df = _read_manifest(path)
+    speech = df[~df["utt_id"].str.fullmatch(_NOISE_ID.pattern)]
+    rows = [
+        {
+            "utt_id": e["utt_id"],
+            "wav_path": _to_manifest_path(Path(e["wav_path"])),
+            "ref_raw": "",
+            "speaker_id": "",
+            "gender": "",
+            "age": "",
+            "audio_sec": round(float(e["audio_sec"]), 4),
+            "source_file": e["source_file"],
+        }
+        for e in entries
+    ]
+    out = pd.concat([speech, pd.DataFrame(rows, columns=list(MANIFEST_COLUMNS))], ignore_index=True)
+    out.to_csv(path, index=False, encoding="utf-8", lineterminator="\n")
+
+
 def _read_manifest(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, encoding="utf-8", dtype=str, keep_default_na=False)
 

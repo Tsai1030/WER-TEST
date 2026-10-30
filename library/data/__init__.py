@@ -7,6 +7,7 @@ from library.data.manifest import (
     build_manifest,
     load_manifest,
     validate_manifest,
+    write_noise_entries,
 )
 from library.data.sampler import sample_utterances
 from library.data.types import Utterance
@@ -23,4 +24,5 @@ __all__ = [
     "sample_utterances",
     "validate_manifest",
     "write_audio",
+    "write_noise_entries",
 ]

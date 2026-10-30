@@ -20,6 +20,7 @@ from library.data import (
     read_audio,
     sample_utterances,
     validate_manifest,
+    write_noise_entries,
 )
 
 SRC_SR = 48000
@@ -159,6 +160,28 @@ def test_validate_detects_problems(corpus: pd.DataFrame, tmp_path: Path) -> None
     assert "音檔不存在" in problems
     assert "gender 不合法" in problems
     assert "取樣率 48000" in problems
+
+
+def test_write_noise_entries_replaces_noise_rows(corpus: pd.DataFrame, tmp_path: Path) -> None:
+    samples = sample_utterances(corpus, n_per_gender=5, seed=42)
+    manifest = build_manifest(samples, tmp_path / "clean")
+    clips = tmp_path / "noise_only"
+    clips.mkdir()
+    entries = []
+    for k in (1, 2):
+        wav = clips / f"noise{k:02d}.wav"
+        sf.write(wav, np.zeros(16000 * 2, dtype="float32"), 16000)
+        entries.append({"utt_id": f"noise{k:02d}", "wav_path": wav, "audio_sec": 2.0, "source_file": "ENVA"})
+
+    write_noise_entries(manifest, entries)
+    write_noise_entries(manifest, entries)  # 重跑不可重複附加
+    df = pd.read_csv(manifest, encoding="utf-8", dtype=str, keep_default_na=False)
+    assert len(df) == 12
+    assert list(df["utt_id"][-2:]) == ["noise01", "noise02"]
+    assert (df.loc[df["utt_id"].str.startswith("noise"), ["ref_raw", "speaker_id", "gender"]] == "").all().all()
+    assert validate_manifest(manifest) == []
+    with pytest.raises(ValueError):
+        write_noise_entries(manifest, [{**entries[0], "utt_id": "n1"}])
 
 
 def test_validate_missing_manifest(tmp_path: Path) -> None:

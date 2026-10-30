@@ -11,6 +11,6 @@ def change_volume(speech: np.ndarray, gain_db: float) -> np.ndarray:
         gain_db: 增益（dB），負值為降低音量。
 
     回傳:
-        調整後的音訊；超出 [-1, 1] 的部分截斷。
+        調整後的音訊（float32）；超出 [-1, 1] 的部分截斷。
     """
-    raise NotImplementedError
+    return np.clip(speech * 10 ** (gain_db / 20), -1.0, 1.0).astype(np.float32)

@@ -15,6 +15,24 @@
 
 ---
 
+## 2026-10-30：M2 噪音源與劣化條件細節
+- 噪音源：DEMAND 16kHz 版（CC BY 4.0，Thiemann, Ito, Vincent，doi:10.5281/zenodo.1227121），
+  選 DKITCHEN、DLIVING、DWASHING、OOFFICE 四個室內環境，各取 ch01（300 秒）。
+  壓縮檔 md5：DKITCHEN 7ffbf52d7f4699f96927846103dc8788、DLIVING 46741384d9e434a0bd8b3ec1830b6052、
+  DWASHING 7e5ee9437ce9409c5f9a779b6212a240、OOFFICE 7b61cc2d182d5a654cb9c3101ddd4041。
+  - 避開 OMEETING、PCAFETER：可能含人聲，會讓 noise_only 的「輸出文字」不再等於幻覺。
+  - DWASHING（洗衣機）最接近機器人本體的機械噪音；之後有機器人錄音時優先替換。
+- 疊加與純噪音分離：每個噪音源最後 60 秒只給 noise_only，前 240 秒用於疊加。
+- 同一句在 snr20/10/05/00 使用相同噪音環境與片段（同 seed），只改變 SNR。
+- 防削波：峰值超過 0.99 時整體等比例縮小，不改變 SNR。
+- 殘響：RT60 0.6s、房間 5×4×3m、距離 2.5m；麥克風高 1.0m（機器人）、聲源高 1.6m（說話者），
+  擺放位置以 geometry_seed 42 固定，所有句子用同一個 RIR；輸出 RMS 調回與輸入相同，避免同時改變音量。
+- 純噪音音量：rms_dbfs −32。clean 語音 RMS 中位數 −21.9 dBFS，−32 約為 snr10 時的噪音大小。
+- noise10（DLIVING 保留區段，原始 −56.4 dBFS，放大 24.4 dB）第 4.1–4.7 秒被 Silero VAD 判為語音；
+  人工抽聽確認為**背景音樂、非人聲**，保留不重新產生。其餘 9 段與四個噪音源整段 VAD 語音比例皆為 0%。
+  分析幻覺率時需注意：音樂是 Whisper 常見的幻覺誘因（例如輸出「♪」），noise10 的結果可單獨對照。
+- 影響範圍：`configs/conditions.yaml`、`library/degrade/`、`library/runner/degrade_set.py`、`scripts/02_make_degraded.py`。
+
 ## 2026-10-30：Whisper 改用 small，保留完整矩陣；Jetson 部署預計 q4
 - 決定：模型名稱 `whisper-turbo` 改為 `whisper-small`（hf_id `openai/whisper-small`，transformers fp32、beam 5、temperature 0）；
   Round 1 保留完整 8 條件 × 4 方法 × 50 句；`num_threads` 維持 4。plan.md 6.5 命名規則同步修改。

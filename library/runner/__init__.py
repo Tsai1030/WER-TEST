@@ -3,6 +3,7 @@
 from library.runner.bench import BenchResult, bench_model, inferences_per_model
 from library.runner.checkpoint import Checkpoint
 from library.runner.config import ExperimentConfig, load_config
+from library.runner.degrade_set import make_degraded_set
 from library.runner.matrix import iter_matrix
 from library.runner.runner import run_experiment
 
@@ -14,5 +15,6 @@ __all__ = [
     "inferences_per_model",
     "iter_matrix",
     "load_config",
+    "make_degraded_set",
     "run_experiment",
 ]
