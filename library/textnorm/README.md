@@ -16,4 +16,5 @@
 
 ## 已知特性
 - "oh" 會被當成數字轉為 "0"（例："oh I see" → "0 i see"）；ref 與 hyp 一致處理，不會造成假錯誤
+- 連續的數字詞會合併成一個數字（"one two three" → "123"），會影響 N（詞數）；ref 與 hyp 一致處理
 - 縮寫字母會拆開（"U.S.A." → "u s a"）、"Mr." → "mister"、"St." → "saint"

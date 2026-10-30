@@ -81,7 +81,7 @@ class WhisperModel(ASRModel):
                 **({"temperature": temperature} if temperature > 0 else {}),
             )
         text = self._processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
-        return Transcript(text=text, language=self.config.get("language"))
+        return Transcript(text=text)  # 本輪強制語言，不回報偵測語言
 
     def _transcribe_faster_whisper(self, wav: np.ndarray, sr: int) -> Transcript:
         if sr != 16000:
@@ -100,7 +100,8 @@ class WhisperModel(ASRModel):
         segments = list(segments)  # generator：實際解碼在此發生
         text = "".join(s.text for s in segments).strip()
         no_speech = max((s.no_speech_prob for s in segments), default=None)
-        return Transcript(text=text, language=info.language, extra={"no_speech_prob": no_speech})
+        detected = None if self.config.get("language") else info.language
+        return Transcript(text=text, language=detected, extra={"no_speech_prob": no_speech})
 
     def describe(self) -> dict:
         """回傳 framework、權重 ID、解碼設定與實際精度。"""
@@ -108,4 +109,5 @@ class WhisperModel(ASRModel):
         if self.framework == "faster-whisper":
             info["hf_id"] = self.config.get("faster_whisper_id")
             info["revision"] = None  # revision 只套用於 transformers 權重
+            info["dtype"] = self.config.get("compute_type", "int8")
         return info

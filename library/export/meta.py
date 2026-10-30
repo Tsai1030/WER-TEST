@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib.metadata
+import json
 import platform
 import sys
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,9 +27,9 @@ TRACKED_PACKAGES: tuple[str, ...] = (
     "librosa",
     "soundfile",
     "jiwer",
+    "whisper-normalizer",
     "faster-whisper",
     "silero-vad",
-    "deepfilternet",
     "noisereduce",
     "pyloudnorm",
     "pyroomacoustics",
@@ -116,14 +118,48 @@ def collect_environment() -> dict:
     }
 
 
-def write_meta(cfg: ExperimentConfig, models: list[ASRModel], path: Path) -> None:
-    """收集 CPU / GPU、RAM、Python 與套件版本、git commit、設定，寫出 meta.json。
+def write_meta(
+    cfg: ExperimentConfig, models: list[ASRModel], path: Path, extra: dict | None = None
+) -> None:
+    """收集 CPU / GPU、RAM、Python 與套件版本、git commit、設定，寫出 meta.json（utf-8）。
 
     欄位見 plan.md 6.4；各模型資訊取自 ASRModel.describe()。
+    extra 由 runner 提供本模組無法取得的資訊（dataset、normalizer、methods、conditions、句數、續跑紀錄等），
+    同名鍵會覆寫預設值；extra["models"] 會合併進各模型的描述。
 
     參數:
         cfg: 實驗設定。
         models: 本輪使用的模型（用於 describe()）。
         path: 輸出路徑。
+        extra: 額外欄位。
     """
-    raise NotImplementedError
+    extra = dict(extra or {})
+    env = collect_environment()
+    model_info = {m.name: m.describe() for m in models}
+    for name, info in (extra.pop("models", None) or {}).items():
+        model_info[name] = {**model_info.get(name, {}), **info}
+    meta = {
+        "round": cfg.name,
+        "date": date.today().isoformat(),
+        "git_commit": env["git_commit"],
+        "device": cfg.device,
+        "cpu": f"{env['cpu']} ({env['cpu_cores']}C/{env['cpu_threads']}T)",
+        "ram_gb": env["ram_gb"],
+        "gpu": env["gpu"],
+        "num_threads": cfg.num_threads,
+        "env": env["env"],
+        "python": env["python"],
+        "precision": cfg.dtype,
+        "dataset": "",
+        "normalizer": cfg.normalizer,
+        "nano_budget_mb": cfg.nano_budget_mb,
+        "seed": cfg.seed,
+        "packages": {k: v for k, v in env["packages"].items() if v is not None},
+        "models": model_info,
+        "methods": {},
+        "conditions": {},
+        **extra,
+    }
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

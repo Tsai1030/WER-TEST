@@ -94,6 +94,9 @@
 ```
 
 - `models` / `methods` / `conditions` 的 key 必須符合命名規則。
+- 另含 `seed`、`resumed`（是否經過續跑）與 `matrix`：
+  `{"models": [...], "methods": [...], "conditions": [...], "n_speech": 50, "n_noise": 10}`，用於驗證 results.csv 列數。
+- `detected_lang` 只記錄自動偵測的語言；設定檔強制語言時留空（Round 1 全部留空）。
 - 若縮減規模、改用 int8 或降噪改用 noisereduce，必須寫入 meta.json（例如在對應 model / method 下記錄實際實作）。
 
 ## 4. 命名規則（網頁依此自動分組，不可隨意更改）

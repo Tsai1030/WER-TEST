@@ -34,7 +34,7 @@ class Qwen3ASRModel(ASRModel):
         self._model = model.to(self.device).eval()
 
     def transcribe(self, wav: np.ndarray, sr: int = 16000) -> Transcript:
-        """辨識並回傳原始文字；language 欄填入強制或偵測到的語言。
+        """辨識並回傳原始文字；設定檔 language 為 null 時，language 欄填入自動偵測到的語言。
 
         例外:
             ValueError: sr 不是 16000（processor 只接受 16kHz）。
@@ -53,8 +53,8 @@ class Qwen3ASRModel(ASRModel):
                 **inputs, do_sample=False, max_new_tokens=decoding.get("max_new_tokens", 512)
             )
         new_tokens = out[0, inputs["input_ids"].shape[1] :]
-        if language is not None:
+        if language is not None:  # 強制語言，不回報偵測語言
             text = self._processor.decode(new_tokens, return_format="transcription_only")
-            return Transcript(text=text.strip(), language=language)
+            return Transcript(text=text.strip())
         parsed = self._processor.decode(new_tokens, return_format="parsed")
         return Transcript(text=parsed["transcription"].strip(), language=parsed["language"])

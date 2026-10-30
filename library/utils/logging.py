@@ -4,6 +4,7 @@ import logging
 
 _FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 _DATEFMT = "%Y-%m-%d %H:%M:%S"
+_NOISY_LOGGERS = ("httpx", "httpx2", "httpcore", "urllib3", "huggingface_hub")
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
@@ -24,6 +25,8 @@ def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
     if log_file is not None:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
     logging.basicConfig(level=numeric, format=_FORMAT, datefmt=_DATEFMT, handlers=handlers, force=True)
+    for noisy in _NOISY_LOGGERS:  # 第三方套件的連線紀錄只顯示警告以上
+        logging.getLogger(noisy).setLevel(max(numeric, logging.WARNING))
 
 
 def get_logger(name: str) -> logging.Logger:

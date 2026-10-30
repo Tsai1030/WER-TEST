@@ -12,8 +12,11 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# results/ 中的大型檔案（--save-processed 輸出的音檔）
+# results/ 中的大型檔案（--save-processed 輸出的音檔）、續跑暫存與備份、冒煙測試輸出
 results/**/*.wav
 results/**/processed/
+results/**/*.bak
+results/**/*.tmp
+results/smoke/
 
 # 注意：uv.lock 必須進版控，不可加入此清單

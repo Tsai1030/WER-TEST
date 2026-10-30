@@ -1,6 +1,6 @@
 """三個輸出檔的欄位定義（與 dashboard/data_contract.md 一致，不可隨意更改）。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 # plan.md 6.5 命名規則：網頁依此自動分組
 MODEL_NAMES: tuple[str, ...] = ("granite-470m", "whisper-small", "qwen3-asr-0.6b", "parakeet-tdt-v2")
@@ -53,3 +53,18 @@ class ResourceRow:
     model_size_mb: float
     load_time_s: float
     gpu_measure: str  # none / torch / pynvml（不同測法不可直接比較）
+
+
+RESULT_COLUMNS: tuple[str, ...] = tuple(f.name for f in fields(ResultRow))
+RESOURCE_COLUMNS: tuple[str, ...] = tuple(f.name for f in fields(ResourceRow))
+GPU_MEASURES: tuple[str, ...] = ("none", "torch", "pynvml")
+META_REQUIRED_KEYS: tuple[str, ...] = (
+    "round", "date", "git_commit", "device", "cpu", "ram_gb", "gpu", "num_threads", "env", "python",
+    "precision", "dataset", "normalizer", "nano_budget_mb", "packages", "models", "methods", "conditions",
+    "matrix",
+)
+
+
+def result_key(model: str, method: str, condition: str, utt_id: str) -> str:
+    """results.csv 一列的唯一鍵（checkpoint 與驗證共用）。"""
+    return f"{model}|{method}|{condition}|{utt_id}"

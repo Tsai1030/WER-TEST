@@ -15,6 +15,19 @@
 
 ---
 
+## 2026-10-30：M5 執行器設計
+- 續跑：已完成組合 = checkpoint.json ∪ results.csv 既有列。results.csv 逐列 flush，checkpoint 每 20 列與每個
+  「模型 × 方法」結束時存檔（先寫 .tmp 再取代），中斷時也會存。即使「列已寫入、checkpoint 未存」也不會重複。
+  完全跑完的模型不再載入，其資源量測與描述取自 checkpoint。
+- `--no-resume`：既有輸出改名為 `.bak`（不直接刪除）後從頭執行；`.bak` 已列入 .gitignore。
+- 記憶體：每個「模型 × 方法」一個 ResourceMonitor（psutil 每 50ms 輪詢 RSS），量到的是含模型權重的行程峰值。
+- `detected_lang` 只記錄**自動偵測**的語言；本輪 Whisper、Qwen 皆強制英文，故留空。
+- round1.yaml 新增 `conditions_file`、`max_utterances`（null）、`meta`（dataset、nano_budget_mb）。
+  `max_utterances` 依女、男輪流取，小規模測試也維持性別平衡。新增 `configs/smoke.yaml`（輸出 results/smoke，不進版控）。
+- meta.json 另含 `seed`、`matrix`（模型、方法、條件、句數，供驗證列數）、`resumed`。
+- 驗收（2026-10-30）：smoke 設定 90 列，於第 30 列強制終止行程後以同一指令續跑，補完 60 列、無重複、驗證通過。
+- 已知：即使鎖定 revision，transformers 載入時仍會連線查詢檔案清單；夜間執行若擔心斷網，可設 `HF_HUB_OFFLINE=1`。
+
 ## 2026-10-30：M4 冒煙測試範圍與時間
 - 決定：`tests/test_smoke_pipeline.py` 預設只跑 granite-470m × 5 個方法（baseline、vad、denoise、loudnorm、vad+denoise）
   × clean / noise_only，2 句 + 1 段純噪音；`SMOKE_ALL=1` 時跑 round1 全部模型 × 方法 × 條件，作為 M4 驗收。

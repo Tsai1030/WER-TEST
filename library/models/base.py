@@ -4,6 +4,7 @@ import gc
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -16,7 +17,7 @@ class Transcript:
     """一次辨識的結果。"""
 
     text: str  # 模型原始輸出文字
-    language: str | None = None  # 多語模型偵測到的語言
+    language: str | None = None  # 多語模型自動偵測到的語言；設定檔強制語言時為 None
     extra: dict | None = None  # 模型特有資訊（例如 Whisper 的 no_speech_prob）
 
 
@@ -107,6 +108,21 @@ class ASRModel(ABC):
         torch = sys.modules.get("torch")
         if torch is not None and torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    def weights_size_mb(self) -> float | None:
+        """模型權重檔大小（MB），自本機 Hugging Face 快取計算；找不到時回傳 None。
+
+        只計 *.safetensors、*.bin、*.pt，不含 tokenizer 與設定檔。不連網。
+        """
+        from huggingface_hub import snapshot_download
+
+        info = self.describe()
+        try:
+            folder = snapshot_download(info["hf_id"], revision=info.get("revision"), local_files_only=True)
+        except Exception:  # noqa: BLE001  快取不存在、離線等都視為無法取得
+            return None
+        files = [p for ext in ("*.safetensors", "*.bin", "*.pt") for p in Path(folder).rglob(ext)]
+        return round(sum(p.stat().st_size for p in files) / 2**20, 1) if files else None
 
     def describe(self) -> dict:
         """回傳 framework、hf_id、decoding 等資訊，寫入 meta.json。"""

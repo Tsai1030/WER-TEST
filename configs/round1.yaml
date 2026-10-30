@@ -35,5 +35,11 @@ methods:
 
 conditions: [clean, snr20, snr10, snr05, snr00, reverb, lowvol, noise_only]
 
+conditions_file: configs/conditions.yaml
 normalizer: english
 save_processed: false
+max_utterances: null   # 只取前 N 句語音（冒煙 / 除錯用）；null = 全部
+
+meta:                  # 寫入 meta.json
+  dataset: Common Voice Scripted Speech 26.0 American English (Female + Male) test
+  nano_budget_mb: 8192

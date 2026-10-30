@@ -31,7 +31,29 @@ def transcribe_file(
         FileNotFoundError: 音檔不存在。
         KeyError: 模型或方法名稱未註冊。
     """
-    raise NotImplementedError
+    from library.data import read_audio
+    from library.methods import get_method
+    from library.models import get_model
+
+    wav, sr = read_audio(wav_path)
+    if sr != 16000:
+        import librosa
+
+        wav, sr = librosa.resample(wav, orig_sr=sr, target_sr=16000), 16000
+    m = get_method(method)
+    m.load(device)
+    try:
+        processed = m.process(wav, sr)
+    finally:
+        m.unload()
+    if len(processed) == 0:  # VAD 判斷無語音
+        return ""
+    asr = get_model(model)
+    asr.load(device)
+    try:
+        return asr.transcribe(processed, sr).text
+    finally:
+        asr.unload()
 
 
 def evaluate(ref: str, hyp: str, normalizer: str = "english") -> AlignmentResult:
@@ -68,4 +90,6 @@ def run_experiment(config_path: str | Path) -> Path:
         FileNotFoundError: 設定檔不存在。
         ValueError: 設定檔欄位不合法。
     """
-    raise NotImplementedError
+    from library import runner
+
+    return runner.run_experiment(runner.load_config(config_path))

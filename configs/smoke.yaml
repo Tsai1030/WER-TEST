@@ -1,0 +1,30 @@
+# 小規模驗證用（M5：續跑、輸出格式驗證）；與 round1 共用資料與劣化音檔，輸出到 results/smoke（不進版控）
+name: smoke
+seed: 42
+device: cpu
+dtype: fp32
+num_threads: 4
+
+paths:
+  manifest: data/clean/manifest.csv
+  degraded_dir: data/degraded
+  output_dir: results/smoke
+
+models:
+  - granite-470m
+
+methods:
+  - baseline
+  - vad
+  - vad+denoise
+
+conditions: [clean, snr05, noise_only]
+
+conditions_file: configs/conditions.yaml
+normalizer: english
+save_processed: false
+max_utterances: 10
+
+meta:
+  dataset: Common Voice Scripted Speech 26.0 American English (Female + Male) test（smoke：前 10 句）
+  nano_budget_mb: 8192
