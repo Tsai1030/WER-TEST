@@ -17,6 +17,8 @@ results/**/*.wav
 results/**/processed/
 results/**/*.bak
 results/**/*.tmp
+results/**/*.log
+results/**/checkpoint.json
 results/smoke/
 
 # 注意：uv.lock 必須進版控，不可加入此清單

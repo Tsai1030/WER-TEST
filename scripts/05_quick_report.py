@@ -2,9 +2,14 @@
 
 用法:
     uv run python scripts/05_quick_report.py results/round1
+
+計算定義與結果網頁相同（dashboard/sections.md），一句話結論需與網頁一致。
 """
 
 import argparse
+
+from library.runner.report import format_report
+from library.utils import resolve_path
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -16,8 +21,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     """印出摘要（含一句話結論，需與網頁一致）；回傳 0 代表成功。"""
-    parse_args(argv)
-    raise NotImplementedError
+    args = parse_args(argv)
+    print(format_report(resolve_path(args.results_dir)))
+    return 0
 
 
 if __name__ == "__main__":
