@@ -1,6 +1,6 @@
 """輸出結果檔（results.csv、resources.csv、meta.json）。"""
 
-from library.export.meta import write_meta
+from library.export.meta import collect_environment, git_commit, package_versions, write_meta
 from library.export.schema import (
     CONDITION_NAMES,
     METHOD_NAMES,
@@ -18,6 +18,9 @@ __all__ = [
     "ResourceRow",
     "ResultRow",
     "ResultWriter",
+    "collect_environment",
+    "git_commit",
+    "package_versions",
     "validate_results",
     "write_meta",
     "write_resources",

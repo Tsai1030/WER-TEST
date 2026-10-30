@@ -4,13 +4,24 @@ version = "0.1.0"
 description = "STT WER 錯誤分析與改善（Round 1：英文）"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-  "numpy", "pandas", "soundfile", "librosa", "pyyaml", "jiwer", "psutil", "tqdm",
-  "torch", "torchaudio", "transformers",
+  "numpy",
+  "pandas",
+  "soundfile",
+  "librosa",
+  "pyyaml",
+  "jiwer",
+  "psutil",
+  "tqdm",
+  "torch",
+  "torchaudio",
+  "transformers>=5.16",
 ]
 
 [project.optional-dependencies]
 audio  = ["pyroomacoustics", "pyloudnorm", "silero-vad", "deepfilternet", "noisereduce"]
-models = ["qwen-asr", "faster-whisper"]
+models = [
+ "faster-whisper",
+]
 
 [dependency-groups]
 dev = ["pytest", "ruff", "mypy"]

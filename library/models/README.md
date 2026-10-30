@@ -8,8 +8,8 @@ STT 模型包裝。所有模型繼承 ASRModel，介面為 transcribe(wav, sr) �
 | registry.py | get_model()、list_models()、register_model() | — |
 | granite.py | Granite Speech 5.0 470M TurboCTC | CTC |
 | parakeet.py | Parakeet TDT 0.6B v2（暫緩，需 Linux／NeMo，目前只有空殼） | Transducer |
-| whisper.py | Whisper large-v3-turbo | Encoder-decoder |
-| qwen3_asr.py | Qwen3-ASR-0.6B | Audio-LLM |
+| whisper.py | Whisper small（transformers；可切換 faster-whisper） | Encoder-decoder |
+| qwen3_asr.py | Qwen3-ASR-0.6B（transformers 原生版 `-hf`） | Audio-LLM |
 
 ## 範例
     model = get_model("granite-470m"); model.load("cpu", "fp32")

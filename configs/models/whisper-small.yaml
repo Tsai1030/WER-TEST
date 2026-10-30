@@ -1,0 +1,12 @@
+name: whisper-small
+enabled: true
+hf_id: openai/whisper-small    # M0：large-v3-turbo 在此 CPU 上 24 s/句，改用 small（11.6 s/句），見 docs/decisions.md
+revision: 973afd24965f72e36ca33b3055d56a652f456b4d   # 鎖定版本（僅 transformers 使用）
+framework: transformers        # 或 faster-whisper（使用下方 faster_whisper_id 與 compute_type）
+faster_whisper_id: Systran/faster-whisper-small   # faster-whisper 內建 "small" 對應的權重
+compute_type: int8             # 僅 faster-whisper 使用；CPU 可用 int8 / float32
+language: en                   # 本輪固定英文；設 null 則自動偵測
+decoding:
+  beam_size: 5
+  temperature: 0.0
+  condition_on_previous_text: false

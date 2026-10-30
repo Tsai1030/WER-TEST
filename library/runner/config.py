@@ -16,7 +16,7 @@ class ExperimentConfig:
     methods: list[str]
     conditions: list[str]
     device: str = "cpu"  # Jetson 上改為 "cuda"
-    dtype: str = "fp32"  # Jetson 上改為 "fp16"
+    dtype: str = "fp32"  # Jetson 部署預計為 q4，另行複驗（plan.md 11.5）
     num_threads: int = 4  # CPU 執行緒數（i3-10110U 為 2 核 4 緒）
     seed: int = 42
     save_processed: bool = False

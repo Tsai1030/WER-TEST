@@ -10,3 +10,4 @@
 | test_degrade.py | 實測 SNR 與目標誤差、同 seed 結果相同 |
 | test_manifest.py | 欄位、檔案存在、取樣率 |
 | test_smoke_pipeline.py | 2 句 × 1 模型跑完整流程（1 分鐘內） |
+| test_models.py | 模型註冊表符合命名規則、parakeet 停用、未 load 時報錯、cuda 退回 cpu、矩陣規模 |

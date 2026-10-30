@@ -1,6 +1,7 @@
 name: granite-470m
 enabled: true
-hf_id: ibm-granite/granite-speech-5.0-470m-turboctc   # 實際 HF ID 於 M0 確認
+hf_id: ibm-granite/granite-speech-5.0-470m-turboctc   # M0 確認；需 transformers ≥ 5.16（GraniteSpeech5ForCTC）
+revision: 1dd23f46f6d4e6eae2531982ba2e33220086dd97    # 鎖定版本（M0 實測所用），避免上游更新造成結果不可重現
 framework: transformers
 architecture: conformer-ctc
 decoding:

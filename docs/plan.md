@@ -2,7 +2,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | v0.4（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩） |
+| 版本 | v0.5（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4） |
 | 日期 | 2026-10-30 |
 | 負責人 | Tsai |
 | 目標平台 | 開發：Windows 原生、**CPU only**（Intel i3-10110U、RAM 15.8GB、無獨立顯卡）；部署驗證：Jetson Orin Nano 8GB |
@@ -73,9 +73,9 @@
 | 純噪音組 | 10 段不含語音的噪音音檔 | 量測幻覺率 |
 | 模型（英文專用） | Granite Speech 5.0 470M TurboCTC（Apache 版） | CTC 架構 |
 | **暫緩模型** | Parakeet TDT 0.6B v2（Transducer） | 依賴 NeMo，官方以 Linux 為主，Windows 原生安裝困難；介面與設定檔先保留，待有 Linux 環境（WSL2 或 Jetson）再加入 |
-| 模型（多語） | Whisper large-v3-turbo、Qwen3-ASR-0.6B | Encoder-decoder 與 Audio-LLM 架構，之後可延伸中文 |
+| 模型（多語） | Whisper small、Qwen3-ASR-0.6B | Encoder-decoder 與 Audio-LLM 架構，之後可延伸中文；Whisper 原為 large-v3-turbo，M0 實測 CPU 上 24 s/句，改 small（11.6 s/句）以保留完整 8 個條件 |
 | 備案模型 | SenseVoice-Small | 若 Qwen3-ASR 部署困難 |
-| 精度 | fp32（CPU） | CPU 不適合 fp16 推論；Jetson 部署時改 fp16，屆時抽樣複驗 WER 是否一致 |
+| 精度 | fp32（CPU） | CPU 上 int8 / q4 不會加速（M0 實測 int8 反而較慢），且三個模型的 q4 需各自不同推論引擎；Jetson 部署預計為 **q4**，屆時以部署版本複驗方法改善幅度是否一致（見 11.5） |
 | 開發環境 | Windows 原生、CPU only，以 **uv** 建立獨立環境，專案路徑 `D:\stt test` | 目前無法使用 Ubuntu、無 NVIDIA 顯卡；程式維持跨平台並支援 `device` 切換，之後可直接搬到 Jetson 使用 GPU |
 | 噪音源 | DEMAND（16kHz 版，挑選數個環境） | MUSAN 完整檔約 11GB，D 槽空間不足；DEMAND 單一環境僅數十 MB |
 | 結果呈現 | 互動式結果網頁（Dashboard），讀取三個輸出檔 | 見第 10 章 |
@@ -85,7 +85,8 @@
 - Common Voice 可能出現在模型訓練資料中（資料污染），baseline WER 可能偏低；本研究看的是**方法開/關的差異**，影響較小。
 - Common Voice 為朗讀語音，沒有贅詞與對話特性；之後可用 MSLT 補充。
 - 說話者為美式口音，與未來使用者（台灣口音英文）有落差。
-- 開發機為低功耗 CPU：**延遲數字與 Jetson GPU 完全不同，只能比較方法之間的相對差異**；記憶體只量 RAM，且 fp32 權重約為 fp16 的兩倍，不能直接當作 Nano 用量。
+- 開發機為低功耗 CPU：**延遲數字與 Jetson GPU 完全不同，只能比較方法之間的相對差異**；記憶體只量 RAM，且 fp32 權重約為 q4 的 8 倍，不能直接當作 Nano 用量。
+- 開發機用 fp32 量方法效果，部署為 q4：量化可能改變模型對噪音的敏感度，方法的改善幅度需在 Jetson 上以 q4 版本複驗。
 - Parakeet 暫緩，本輪缺少 Transducer 架構，「哪類方法對哪類架構有效」的比較只涵蓋 CTC、Encoder-decoder、Audio-LLM 三類。
 - Common Voice 條款禁止重新散佈資料集與辨識說話者：音檔不可放到公開位置。
 
@@ -174,7 +175,7 @@ D:\stt test\                    專案根目錄
 │   ├── models/
 │   │   ├── granite-470m.yaml
 │   │   ├── parakeet-tdt-v2.yaml  （暫緩，enabled: false）
-│   │   ├── whisper-turbo.yaml
+│   │   ├── whisper-small.yaml
 │   │   └── qwen3-asr-0.6b.yaml
 │   └── methods/
 │       ├── vad.yaml
@@ -211,7 +212,7 @@ D:\stt test\                    專案根目錄
 │   │   ├── chain.py             MethodChain：依序串接多個方法
 │   │   ├── identity.py          baseline（不處理）
 │   │   ├── vad.py               Silero VAD：去除非語音段
-│   │   ├── denoise.py           DeepFilterNet 降噪
+│   │   ├── denoise.py           降噪（noisereduce；原規劃 DeepFilterNet）
 │   │   └── loudnorm.py          響度 / RMS 正規化
 │   │
 │   ├── models/                  STT 模型包裝（統一介面）
@@ -221,7 +222,7 @@ D:\stt test\                    專案根目錄
 │   │   ├── registry.py          模型註冊與 get_model()
 │   │   ├── granite.py           Granite Speech 5.0 470M TurboCTC
 │   │   ├── parakeet.py          Parakeet TDT 0.6B v2（暫緩：保留空殼，不實作）
-│   │   ├── whisper.py           Whisper large-v3-turbo
+│   │   ├── whisper.py           Whisper small
 │   │   └── qwen3_asr.py         Qwen3-ASR-0.6B
 │   │
 │   ├── textnorm/                文字正規化
@@ -338,7 +339,7 @@ D:\stt test\                    專案根目錄
 ```python
 def transcribe_file(
     wav_path: str | Path,
-    model: str = "whisper-turbo",
+    model: str = "whisper-small",
     method: str = "baseline",
     device: str = "cpu",
 ) -> str:
@@ -532,7 +533,7 @@ class ExperimentConfig:
     methods: list[str]
     conditions: list[str]
     device: str = "cpu"           # Jetson 上改為 "cuda"
-    dtype: str = "fp32"           # Jetson 上改為 "fp16"
+    dtype: str = "fp32"           # Jetson 部署預計為 q4，另行複驗（見 11.5）
     num_threads: int = 4          # CPU 執行緒數（i3-10110U 為 2 核 4 緒）
     seed: int = 42
     save_processed: bool = False
@@ -627,9 +628,9 @@ def validate_results(results_dir: Path) -> list[str]: ...
   "dataset": "Common Voice Scripted Speech 26.0 US English F+M test, 25+25, seed 42, + 10 noise-only",
   "normalizer": "whisper EnglishTextNormalizer + filler removal",
   "nano_budget_mb": 8192,
-  "packages": { "torch": "x.y", "transformers": "x.y", "qwen-asr": "x.y" },
+  "packages": { "torch": "x.y", "transformers": "x.y" },
   "models": {
-    "whisper-turbo": { "hf_id": "openai/whisper-large-v3-turbo", "framework": "transformers", "decoding": "beam 5, temperature 0" }
+    "whisper-small": { "hf_id": "openai/whisper-small", "framework": "transformers", "decoding": "beam 5, temperature 0" }
   },
   "methods": { "vad": { "threshold": 0.5, "min_silence_ms": 300, "pad_ms": 200 } },
   "conditions": { "snr10": { "snr_db": 10, "noise_source": "DEMAND (16k)" } }
@@ -640,7 +641,7 @@ def validate_results(results_dir: Path) -> list[str]: ...
 
 | 欄位 | 允許值 |
 |---|---|
-| model | `granite-470m`、`whisper-turbo`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
+| model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
 | condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`reverb`、`lowvol`、`noise_only` |
 | method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
 
@@ -654,8 +655,8 @@ def validate_results(results_dir: Path) -> list[str]: ...
 name: round1
 seed: 42
 device: cpu          # Jetson 上改為 cuda
-dtype: fp32          # Jetson 上改為 fp16
-num_threads: 4
+dtype: fp32          # Jetson 部署預計為 q4，以部署版本另行複驗（11.5）
+num_threads: 4       # M0 實測：2 緒時 Whisper 慢 65%，維持 4
 
 paths:
   raw:                                 # 依 tar -tzf 結果確認實際路徑
@@ -663,6 +664,7 @@ paths:
     male: data/raw/male
   manifest: data/clean/manifest.csv
   degraded_dir: data/degraded
+  output_dir: results/round1
 
 sampling:
   tsv_name: test.tsv
@@ -672,12 +674,11 @@ sampling:
   min_words: 5
   max_down_votes: 0
   one_per_speaker: true
-  output_dir: results/round1
 
 models:
   - granite-470m
   # - parakeet-tdt-v2   # 暫緩：需 Linux 環境（NeMo）
-  - whisper-turbo
+  - whisper-small
   - qwen3-asr-0.6b
 
 methods:
@@ -707,11 +708,11 @@ conditions:
   noise_only: { type: noise_only, n_clips: 10, clip_sec: 5.0 }
 ```
 
-### 7.3 `configs/models/whisper-turbo.yaml`（範例）
+### 7.3 `configs/models/whisper-small.yaml`（範例）
 
 ```yaml
-name: whisper-turbo
-hf_id: openai/whisper-large-v3-turbo
+name: whisper-small
+hf_id: openai/whisper-small
 framework: transformers        # 或 faster-whisper
 language: en                   # 本輪固定英文；設 null 則自動偵測
 decoding:
@@ -741,10 +742,12 @@ pad_ms: 200          # 語音段前後保留，避免吃掉句首句尾
 |---|---|---|---|---|
 | granite-470m | ibm-granite/granite-speech-5.0-470m-turboctc | Conformer + CTC | transformers | greedy |
 | ~~parakeet-tdt-v2~~（暫緩） | nvidia/parakeet-tdt-0.6b-v2 | FastConformer + TDT | NeMo | greedy |
-| whisper-turbo | openai/whisper-large-v3-turbo | Encoder-decoder | transformers / faster-whisper | beam 5, temp 0 |
-| qwen3-asr-0.6b | Qwen/Qwen3-ASR-0.6B | Audio-LLM | qwen-asr（transformers 後端） | greedy, language=English |
+| whisper-small | openai/whisper-small | Encoder-decoder | transformers / faster-whisper | beam 5, temp 0 |
+| qwen3-asr-0.6b | Qwen/Qwen3-ASR-0.6B-hf | Audio-LLM | transformers（≥ 5.13 原生支援） | greedy, language=English |
 
-> 實際的 HF ID 與套件版本在 M0 階段確認後寫入設定檔。
+> 實際的 HF ID 與套件版本在 M0 階段確認後寫入設定檔（已確認，理由見 `docs/decisions.md`）：
+> Granite 需 transformers ≥ 5.16；qwen-asr 套件鎖 transformers 4.57，與 Granite 衝突，故改用 transformers 原生版；
+> Whisper 由 large-v3-turbo 改為 small（CPU 速度）。
 
 ### 8.2 劣化條件
 
@@ -766,7 +769,7 @@ pad_ms: 200          # 語音段前後保留，避免吃掉句首句尾
 |---|---|---|---|
 | baseline | 不處理 | — | 基準 |
 | vad | Silero VAD | threshold 0.5、pad 200ms | 減少插入錯誤與幻覺，Whisper 最明顯 |
-| denoise | DeepFilterNet（Windows 安裝失敗時改用 noisereduce） | 預設 | 低 SNR 改善；高 SNR 可能變差 |
+| denoise | noisereduce（原規劃 DeepFilterNet；M0 實測 0.5.6 與新版 torchaudio 不相容，改用備案） | 預設 | 低 SNR 改善；高 SNR 可能變差 |
 | loudnorm | pyloudnorm 正規化到 −23 LUFS | 目標響度 | 改善 lowvol 條件 |
 | vad+denoise | 先 VAD 再降噪 | — | 兩者疊加效果 |
 
@@ -797,6 +800,19 @@ pad_ms: 200          # 語音段前後保留，避免吃掉句首句尾
 | > 24 小時 | 再減為每性別 15 句（共 30 句），或分模型分天執行 |
 
 > 若改用 int8 或縮減規模，必須寫入 `meta.json`，並在報告中註明。
+
+**M0 實測結果（2026-10-30，fp32、4 緒、每模型 5 句）**
+
+| 模型 | 平均每句秒數 | RTF | 每模型 1,440 次 |
+|---|---|---|---|
+| granite-470m | 1.14 | 0.22 | 0.5 小時 |
+| whisper-large-v3-turbo（原規劃） | 24.07 | 4.71 | 9.6 小時 |
+| whisper-large-v3-turbo，faster-whisper int8 | 28.23 | 5.52 | 11.3 小時（反而較慢，不採用） |
+| **whisper-small（採用）** | 11.57 | 2.26 | 4.6 小時 |
+| qwen3-asr-0.6b | 5.20 | 1.02 | 2.1 小時 |
+
+決定：保留完整 8 條件 × 4 方法 × 50 句，Whisper 改 small，合計約 7.2 小時（未含方法處理時間），夜間執行。
+2 緒時 Whisper 慢 65%，維持 `num_threads: 4`。
 
 ---
 
@@ -906,12 +922,12 @@ name = "stt-wer-bench"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "numpy", "pandas", "soundfile", "librosa", "pyyaml", "jiwer", "psutil", "tqdm",
-  "torch", "torchaudio", "transformers",
+  "torch", "torchaudio", "transformers>=5.16",
 ]
 
 [project.optional-dependencies]
 audio  = ["pyroomacoustics", "pyloudnorm", "silero-vad", "deepfilternet", "noisereduce"]
-models = ["qwen-asr", "faster-whisper"]
+models = ["faster-whisper"]   # M0：移除 qwen-asr（鎖 transformers 4.57，與 Granite 衝突）
 
 [dependency-groups]
 dev = ["pytest", "ruff", "mypy"]
@@ -938,9 +954,9 @@ uv add <套件>                           # 新增套件（自動寫入 pyprojec
 
 | 群組 | 套件 |
 |---|---|
-| 主要（dependencies） | numpy、pandas、soundfile、librosa、pyyaml、jiwer、psutil、tqdm、torch（CPU 版）、torchaudio、transformers、whisper-normalizer（或 openai-whisper 內建 normalizer） |
-| audio | pyroomacoustics、pyloudnorm、silero-vad、deepfilternet；備案 noisereduce |
-| models | qwen-asr（transformers 後端）、faster-whisper（CPU int8 備案） |
+| 主要（dependencies） | numpy、pandas、soundfile、librosa、pyyaml、jiwer、psutil、tqdm、torch（CPU 版）、torchaudio、transformers（≥ 5.16，Granite 與 Qwen3-ASR 原生支援）、whisper-normalizer（或 openai-whisper 內建 normalizer） |
+| audio | pyroomacoustics、pyloudnorm、silero-vad、noisereduce（實際使用）；deepfilternet 已安裝但 import 失敗，不使用 |
+| models | faster-whisper（int8 備案；M0 實測此 CPU 上不會加速） |
 | dev | pytest、ruff、mypy |
 | 暫不安裝 | nemo_toolkit（Parakeet）、vLLM（不支援 Windows）、KenLM、pynvml（無 NVIDIA 顯卡） |
 
@@ -1034,7 +1050,7 @@ foreach ($g in "female", "male") {
 
 ### 11.5 Jetson 遷移（之後）
 
-- 在 Jetson 上以相同設定檔、相同 50 句複跑 baseline 與效果最好的方法
+- 在 Jetson 上以相同設定檔、相同 50 句複跑 baseline 與效果最好的方法，**使用預計部署的 q4 版本**（推論引擎依模型而定）
 - 比較「方法開/關的改善幅度」是否與 Windows 一致
 - Jetson 為 Linux：先跑 `pytest` 確認跨平台沒問題，再複跑實驗；屆時可一併加入 Parakeet
 - 實測記憶體（統一記憶體，需看系統總用量）
@@ -1127,7 +1143,7 @@ Parakeet 暫緩（只建空殼）。
 | 不同框架記憶體測法不同 | 記憶體無法公平比較 | `gpu_measure` 欄位標示；同模型內比較方法差異 |
 | 降噪模型本身佔記憶體 | 影響模型峰值記憶體 | 方法與模型分開量測並分別記錄 |
 | CPU 推論太慢 | 完整矩陣跑不完 | M0 實測速度，依 8.5 節縮減條件、改 int8 或分天執行；續跑機制 |
-| fp32（開發）與 fp16（Jetson）精度不同 | WER 搬過去略有差異 | 看方法間相對改善；Jetson 上抽樣複驗 |
+| fp32（開發）與 q4（Jetson 部署）精度不同 | 量化模型對噪音的敏感度可能不同，方法改善幅度不一定能直接搬過去 | 看方法間相對改善；Jetson 上以 q4 部署版本複驗 baseline 與最佳方法 |
 | D 槽空間不足（剩約 18GB） | 模型、噪音、劣化音檔放不下 | 不用 MUSAN；快取集中管理；劣化音檔只存 50 句 × 8 條件（約數百 MB） |
 | Whisper temperature fallback 不固定 | 結果不可重現 | 固定 temperature 0；穩定性抽查（同輸入跑兩次） |
 | 長時間執行中斷 | 重跑浪費時間 | checkpoint 續跑、逐列寫入 |
@@ -1218,7 +1234,7 @@ Parakeet 暫緩（只建空殼）。
 | data/ | 讀資料集、抽樣、轉檔、manifest | sample_utterances, build_manifest, load_manifest |
 | degrade/ | 產生劣化音訊 | apply_condition, add_noise |
 | methods/ | 音訊前處理方法 | get_method("vad+denoise") |
-| models/ | STT 模型統一介面 | get_model("whisper-turbo") |
+| models/ | STT 模型統一介面 | get_model("whisper-small") |
 | textnorm/ | 文字正規化 | normalize |
 | scoring/ | 對齊、WER、統計 | align, corpus_wer, paired_bootstrap |
 | monitor/ | 記憶體、延遲量測 | ResourceMonitor, Timer |
@@ -1291,7 +1307,7 @@ Parakeet 暫緩（只建空殼）。
 | chain.py | MethodChain：依序串接，支援 "vad+denoise" |
 | identity.py | baseline：原樣回傳 |
 | vad.py | Silero VAD：保留語音段；完全無語音時回傳空陣列 |
-| denoise.py | DeepFilterNet 降噪 |
+| denoise.py | 降噪（noisereduce；原規劃 DeepFilterNet） |
 | loudnorm.py | 響度正規化到目標 LUFS |
 
 ## 範例
@@ -1318,7 +1334,7 @@ STT 模型包裝。所有模型繼承 ASRModel，介面為 transcribe(wav, sr) �
 | registry.py | get_model()、list_models()、register_model() | — |
 | granite.py | Granite Speech 5.0 470M TurboCTC | CTC |
 | parakeet.py | Parakeet TDT 0.6B v2（暫緩，需 Linux／NeMo，目前只有空殼） | Transducer |
-| whisper.py | Whisper large-v3-turbo | Encoder-decoder |
+| whisper.py | Whisper small | Encoder-decoder |
 | qwen3_asr.py | Qwen3-ASR-0.6B | Audio-LLM |
 
 ## 範例
@@ -1387,7 +1403,7 @@ STT 模型包裝。所有模型繼承 ASRModel，介面為 transcribe(wav, sr) �
     print(mon.peak_gpu_mb, mon.peak_ram_mb, mon.elapsed_ms)
 
 ## 注意
-- 本輪為 CPU only：peak_gpu_mb 為 None，只看 RAM；fp32 權重約為 Jetson fp16 的兩倍，需在 Jetson 實測
+- 本輪為 CPU only：peak_gpu_mb 為 None，只看 RAM；fp32 權重約為 Jetson 部署 q4 的 8 倍，需在 Jetson 實測
 - 不同量測方式（torch / pynvml）的數字不可直接比較
 ```
 
@@ -1543,7 +1559,7 @@ STT 模型包裝。所有模型繼承 ASRModel，介面為 transcribe(wav, sr) �
 ```python
 from library import transcribe_file
 
-text = transcribe_file("sample.wav", model="whisper-turbo", method="vad")
+text = transcribe_file("sample.wav", model="whisper-small", method="vad")
 print(text)
 ```
 

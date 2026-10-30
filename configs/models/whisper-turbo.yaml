@@ -1,9 +1,0 @@
-name: whisper-turbo
-enabled: true
-hf_id: openai/whisper-large-v3-turbo
-framework: transformers        # 或 faster-whisper
-language: en                   # 本輪固定英文；設 null 則自動偵測
-decoding:
-  beam_size: 5
-  temperature: 0.0
-  condition_on_previous_text: false

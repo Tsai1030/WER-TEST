@@ -1,10 +1,11 @@
 name: qwen3-asr-0.6b
 enabled: true
-hf_id: Qwen/Qwen3-ASR-0.6B                 # 實際 HF ID 於 M0 確認
-framework: qwen-asr                        # transformers 後端
-backend: transformers
+hf_id: Qwen/Qwen3-ASR-0.6B-hf              # transformers 原生版（M0 確認）；不用 qwen-asr 套件（鎖 transformers 4.57）
+revision: 7f1569a48a89f3e3f4dc3a5c9d28bddd903bc76c   # 鎖定版本（M0 實測所用）
+framework: transformers
 architecture: audio-llm
-language: English
+language: English                          # 以 processor 強制語言；設 null 則自動偵測
 decoding:
   strategy: greedy
+  max_new_tokens: 512
 # 備案：部署困難時改用 SenseVoice-Small（sherpa-onnx）

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 # plan.md 6.5 命名規則：網頁依此自動分組
-MODEL_NAMES: tuple[str, ...] = ("granite-470m", "whisper-turbo", "qwen3-asr-0.6b", "parakeet-tdt-v2")
+MODEL_NAMES: tuple[str, ...] = ("granite-470m", "whisper-small", "qwen3-asr-0.6b", "parakeet-tdt-v2")
 CONDITION_NAMES: tuple[str, ...] = (
     "clean",
     "snr20",

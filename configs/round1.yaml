@@ -1,7 +1,7 @@
 name: round1
 seed: 42
 device: cpu          # Jetson 上改為 cuda
-dtype: fp32          # Jetson 上改為 fp16
+dtype: fp32          # Jetson 部署預計為 q4，以部署版本另行複驗（plan.md 11.5）
 num_threads: 4
 
 paths:
@@ -24,7 +24,7 @@ sampling:
 models:
   - granite-470m
   # - parakeet-tdt-v2   # 暫緩：需 Linux 環境（NeMo）
-  - whisper-turbo
+  - whisper-small
   - qwen3-asr-0.6b
 
 methods:

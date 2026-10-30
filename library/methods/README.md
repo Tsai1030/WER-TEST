@@ -9,7 +9,7 @@
 | chain.py | MethodChain：依序串接，支援 "vad+denoise" |
 | identity.py | baseline：原樣回傳 |
 | vad.py | Silero VAD：保留語音段；完全無語音時回傳空陣列 |
-| denoise.py | DeepFilterNet 降噪 |
+| denoise.py | 降噪（noisereduce；原規劃 DeepFilterNet，因與新版 torchaudio 不相容而停用） |
 | loudnorm.py | 響度正規化到目標 LUFS |
 
 ## 範例

@@ -86,7 +86,7 @@
   "nano_budget_mb": 8192,
   "packages": { "torch": "x.y", "transformers": "x.y", "qwen-asr": "x.y" },
   "models": {
-    "whisper-turbo": { "hf_id": "openai/whisper-large-v3-turbo", "framework": "transformers", "decoding": "beam 5, temperature 0" }
+    "whisper-small": { "hf_id": "openai/whisper-small", "framework": "transformers", "decoding": "beam 5, temperature 0" }
   },
   "methods": { "vad": { "threshold": 0.5, "min_silence_ms": 300, "pad_ms": 200 } },
   "conditions": { "snr10": { "snr_db": 10, "noise_source": "DEMAND (16k)" } }
@@ -100,7 +100,7 @@
 
 | 欄位 | 允許值 |
 |---|---|
-| model | `granite-470m`、`whisper-turbo`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
+| model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
 | condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`reverb`、`lowvol`、`noise_only` |
 | method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
 

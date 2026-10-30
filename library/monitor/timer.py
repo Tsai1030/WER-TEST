@@ -1,5 +1,6 @@
 """延遲計時。"""
 
+import time
 from typing import Self
 
 
@@ -10,8 +11,10 @@ class Timer:
 
     def __enter__(self) -> Self:
         """開始計時（time.perf_counter）。"""
-        raise NotImplementedError
+        self.ms = 0.0
+        self._start = time.perf_counter()
+        return self
 
     def __exit__(self, *exc) -> None:
         """停止計時並將經過時間（毫秒）寫入 ms；不吞掉例外。"""
-        raise NotImplementedError
+        self.ms = (time.perf_counter() - self._start) * 1000.0

@@ -12,7 +12,7 @@ __all__ = ["AlignmentResult", "evaluate", "run_experiment", "transcribe_file"]
 
 def transcribe_file(
     wav_path: str | Path,
-    model: str = "whisper-turbo",
+    model: str = "whisper-small",
     method: str = "baseline",
     device: str = "cpu",
 ) -> str:
@@ -20,7 +20,7 @@ def transcribe_file(
 
     參數:
         wav_path: 音檔路徑。
-        model: 模型名稱（見 plan.md 6.5，例：whisper-turbo）。
+        model: 模型名稱（見 plan.md 6.5，例：whisper-small）。
         method: 前處理方法名稱，可用 '+' 串接（例：vad+denoise）。
         device: 執行裝置；cuda 不可用時退回 cpu。
 

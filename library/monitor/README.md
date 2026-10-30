@@ -13,5 +13,5 @@
     print(mon.peak_gpu_mb, mon.peak_ram_mb, mon.elapsed_ms)
 
 ## 注意
-- 本輪為 CPU only：peak_gpu_mb 為 None，只看 RAM；fp32 權重約為 Jetson fp16 的兩倍，需在 Jetson 實測
+- 本輪為 CPU only：peak_gpu_mb 為 None，只看 RAM；fp32 權重約為 Jetson 部署 q4 的 8 倍，需在 Jetson 實測
 - 不同量測方式（torch / pynvml）的數字不可直接比較
