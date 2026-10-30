@@ -10,6 +10,8 @@ CONDITION_NAMES: tuple[str, ...] = (
     "snr10",
     "snr05",
     "snr00",
+    "snrm05",  # 負 SNR：m = minus（Round 2 起）
+    "snrm10",
     "reverb",
     "lowvol",
     "noise_only",

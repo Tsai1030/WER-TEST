@@ -170,20 +170,39 @@ def test_no_resume_backs_up_previous_outputs(cfg: ExperimentConfig) -> None:
     assert len(_results(cfg)) == 10
 
 
+def test_method_params_override_reaches_method_and_meta(cfg: ExperimentConfig) -> None:
+    cfg.methods = ["baseline", "loudnorm"]
+    cfg.method_params = {"loudnorm": {"target_lufs": -16.0}}
+    out = run_experiment(cfg)
+    assert validate_results(out) == []
+    meta = (out / "meta.json").read_text(encoding="utf-8")
+    assert '"target_lufs": -16.0' in meta
+
+
 def test_load_config_round1() -> None:
     cfg = load_config("configs/round1.yaml")
     assert cfg.name == "round1" and cfg.models == ["granite-470m", "whisper-small", "qwen3-asr-0.6b"]
     assert cfg.methods == ["baseline", "vad", "denoise", "vad+denoise"]
     assert cfg.output_dir.name == "round1" and cfg.output_dir.is_absolute()
     assert cfg.nano_budget_mb == 8192 and cfg.max_utterances is None
+    assert cfg.method_params == {}
+
+
+def test_load_config_round2() -> None:
+    cfg = load_config("configs/round2.yaml")
+    assert cfg.output_dir.name == "round2"
+    assert cfg.conditions == ["clean", "snr00", "snrm05", "snrm10", "lowvol", "noise_only"]
+    assert {"loudnorm", "vad+loudnorm"} <= set(cfg.methods)
+    assert cfg.method_params["denoise"]["params"] == {"prop_decrease": 0.5}
 
 
 @pytest.mark.parametrize(
     ("key", "value", "match"),
     [("models", ["foo"], "命名規則"), ("methods", ["vad+magic"], "命名規則"),
-     ("conditions", ["snr99"], "命名規則"), ("models", ["parakeet-tdt-v2"], "enabled: false")],
+     ("conditions", ["snr99"], "命名規則"), ("models", ["parakeet-tdt-v2"], "enabled: false"),
+     ("method_params", {"magic": {}}, "命名規則")],
 )
-def test_load_config_rejects_bad_names(tmp_path: Path, key: str, value: list[str], match: str) -> None:
+def test_load_config_rejects_bad_names(tmp_path: Path, key: str, value: list[str] | dict, match: str) -> None:
     raw = yaml.safe_load(Path("configs/round1.yaml").read_text(encoding="utf-8"))
     raw[key] = value
     path = tmp_path / "bad.yaml"

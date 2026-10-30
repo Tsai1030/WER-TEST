@@ -11,7 +11,7 @@
 | test_degrade.py | 實測 SNR 與目標誤差、同 seed 結果相同 |
 | test_manifest.py | 欄位、檔案存在、取樣率 |
 | test_smoke_pipeline.py | 2 句 × granite × 全部方法 × clean / noise_only 跑完整流程（開發機約 1 分鐘）；`SMOKE_ALL=1` 時跑全部模型 × 方法 × 條件（M4 驗收，約 20 分鐘） |
-| test_runner.py | 設定讀取與命名驗證、矩陣展開順序、完整執行通過驗證、中斷續跑不重複、已完成模型不重載、--no-resume 備份 |
+| test_runner.py | 設定讀取與命名驗證（round1 / round2）、矩陣展開順序、完整執行通過驗證、中斷續跑不重複、已完成模型不重載、--no-resume 備份、method_params 覆寫 |
 | test_export.py | ResultWriter 附加與空欄位、validate_results 能抓出各類規格錯誤 |
 | test_report.py | 摘要計算：整體 WER 加權、ΔWER 顯著判定、幻覺率、假錯誤、一句話結論 |
 | test_monitor.py | ResourceMonitor 峰值 RAM、CPU only 時 GPU 為 None、Timer |

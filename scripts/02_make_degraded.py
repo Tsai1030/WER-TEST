@@ -29,7 +29,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """產生 7 個劣化條件與純噪音片段；回傳 0 代表成功且驗證通過。"""
+    """產生設定檔 conditions 列出的劣化條件與純噪音片段；回傳 0 代表成功且驗證通過。"""
     args = parse_args(argv)
     setup_logging()
     cfg = load_yaml(resolve_path(args.config))

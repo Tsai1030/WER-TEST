@@ -29,6 +29,8 @@ class ExperimentConfig:
     max_utterances: int | None = None  # 只取前 N 句語音（冒煙 / 除錯用；None = 全部）
     dataset: str = ""
     nano_budget_mb: int = 8192
+    # {方法名稱: 設定}；取代 configs/methods/<name>.yaml，只作用於本輪（plan.md 7.1）
+    method_params: dict[str, dict] = field(default_factory=dict)
 
 
 def _check_names(kind: str, names: list[str], allowed: tuple[str, ...], split_plus: bool = False) -> None:
@@ -46,7 +48,7 @@ def _check_names(kind: str, names: list[str], allowed: tuple[str, ...], split_pl
 def load_config(path: str | Path) -> ExperimentConfig:
     """讀取 YAML（utf-8）並驗證欄位；路徑相對於專案根目錄解析。
 
-    驗證項目：必要欄位存在、models / methods / conditions 名稱符合 plan.md 6.5、
+    驗證項目：必要欄位存在、models / methods / conditions / method_params 名稱符合 plan.md 6.5、
     模型設定檔 enabled 為 true、每個條件都定義在 conditions.yaml。
 
     參數:
@@ -78,6 +80,7 @@ def load_config(path: str | Path) -> ExperimentConfig:
             setattr(cfg, key, raw[key])
     if "conditions_file" in raw:
         cfg.conditions_file = resolve_path(raw["conditions_file"])
+    cfg.method_params = dict(raw.get("method_params") or {})
     meta = raw.get("meta") or {}
     cfg.dataset = meta.get("dataset", cfg.dataset)
     cfg.nano_budget_mb = meta.get("nano_budget_mb", cfg.nano_budget_mb)
@@ -85,6 +88,8 @@ def load_config(path: str | Path) -> ExperimentConfig:
     _check_names("models", cfg.models, MODEL_NAMES)
     _check_names("methods", cfg.methods, METHOD_NAMES, split_plus=True)
     _check_names("conditions", cfg.conditions, CONDITION_NAMES)
+    if cfg.method_params:
+        _check_names("method_params", list(cfg.method_params), METHOD_NAMES)
     for m in cfg.models:
         model_cfg = load_yaml(configs_dir() / "models" / f"{m}.yaml")
         if not model_cfg.get("enabled", True):

@@ -23,6 +23,7 @@ from library.degrade import (
     pick_noise_env,
     prevent_clipping,
     room_impulse_response,
+    speech_component,
 )
 
 SR = 16000
@@ -73,7 +74,7 @@ def cond_cfg(tmp_path: Path) -> dict:
     }
 
 
-@pytest.mark.parametrize("snr", [20, 10, 5, 0, -5])
+@pytest.mark.parametrize("snr", [20, 10, 5, 0, -5, -10])
 def test_add_noise_hits_target_snr(snr: float) -> None:
     speech, noise = _speech(), _noise(10.0, 1)
     mixed = add_noise(speech, noise, snr, seed=3)
@@ -157,6 +158,19 @@ def test_apply_condition_variants(cond_cfg: dict) -> None:
         apply_condition(speech, SR, "noise_only", cond_cfg, 0)
     with pytest.raises(KeyError):
         apply_condition(speech, SR, "snr99", cond_cfg, 0)
+
+
+def test_speech_component_gives_exact_snr_after_clip_guard(cond_cfg: dict) -> None:
+    """負 SNR 時防削波會整體縮放；以 speech_component 扣除語音成分，可精確算出 SNR。"""
+    cond_cfg["conditions"]["snrm10"] = {"type": "noise", "snr_db": -10}
+    speech = _speech() * 4  # 放大讓混合後超過削波門檻
+    out = apply_condition(speech, SR, "snrm10", cond_cfg, seed=5)
+    part = speech_component(speech, SR, "snrm10", cond_cfg, seed=5)
+    assert np.max(np.abs(out)) == pytest.approx(0.99, abs=1e-4)  # 確實經過防削波
+    noise = out.astype(np.float64) - part
+    assert 10 * np.log10(np.dot(part, part) / np.dot(noise, noise)) == pytest.approx(-10, abs=1e-3)
+    with pytest.raises(ValueError):
+        speech_component(speech, SR, "lowvol", cond_cfg, seed=5)
 
 
 def test_same_utterance_same_noise_across_snr(cond_cfg: dict) -> None:

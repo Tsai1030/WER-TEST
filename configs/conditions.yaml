@@ -8,6 +8,8 @@ conditions:
   snr10:   { type: noise, snr_db: 10 }
   snr05:   { type: noise, snr_db: 5 }
   snr00:   { type: noise, snr_db: 0 }
+  snrm05:  { type: noise, snr_db: -5 }   # 負 SNR（m = minus）：噪音比語音大，Round 2 起
+  snrm10:  { type: noise, snr_db: -10 }
   reverb:  { type: reverb, rt60: 0.6, room_dim: [5.0, 4.0, 3.0], src_mic_distance: 2.5, geometry_seed: 42 }
   lowvol:  { type: volume, gain_db: -20 }
   # rms_dbfs：clean 語音 RMS 中位數 −21.9 dBFS，−32 約等於 snr10 時的噪音大小

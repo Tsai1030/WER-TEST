@@ -10,9 +10,9 @@ from library.degrade import (
     apply_condition,
     build_noise_only_clips,
     estimate_rt60,
-    measure_snr,
     pick_noise_env,
     room_impulse_response,
+    speech_component,
 )
 
 LOG_NAME = "degrade_log.csv"
@@ -20,6 +20,12 @@ LOG_NAME = "degrade_log.csv"
 
 def _rms_db(wav: np.ndarray) -> float:
     return 10 * np.log10(float(np.mean(wav.astype(np.float64) ** 2)))
+
+
+def _snr_db(speech_part: np.ndarray, written: np.ndarray) -> float:
+    """已知語音成分時的實際 SNR（噪音成分 = 寫出的音檔 − 語音成分，含 16-bit 量化）。"""
+    noise_part = written.astype(np.float64) - speech_part
+    return 10 * np.log10(float(np.dot(speech_part, speech_part)) / float(np.dot(noise_part, noise_part)))
 
 
 def make_degraded_set(
@@ -32,9 +38,10 @@ def make_degraded_set(
     """產生 out_root/<condition>/<utt_id>.wav 與純噪音片段，回傳逐檔驗證紀錄。
 
     - 每句的 seed 為 seed + 句子序號；同一句在各 SNR 條件使用相同噪音環境與片段。
-    - 寫檔後重新讀取（含 16-bit 量化）再量測：noise 條件量 SNR、volume 量增益、reverb 量 RIR 的 RT60。
+    - 寫檔後重新讀取（含 16-bit 量化）再量測：noise 條件量 SNR（以已知語音成分計算，不估計增益）、
+      volume 量增益、reverb 量 RIR 的 RT60。
     - noise_only 片段寫到 out_root/noise_only/noiseNN.wav，並更新 manifest 的 noise 列。
-    - 驗證紀錄另存為 out_root/degrade_log.csv（utf-8）。
+    - 驗證紀錄另存為 out_root/degrade_log.csv（utf-8）；已存在時只取代本次條件的列，其他條件保留。
 
     參數:
         manifest_path: data/clean/manifest.csv。
@@ -44,7 +51,7 @@ def make_degraded_set(
         seed: 亂數種子。
 
     回傳:
-        DataFrame，欄位 utt_id、condition、type、noise_env、target、measured、error。
+        本次產生的條件的驗證紀錄（DataFrame），欄位 utt_id、condition、type、noise_env、target、measured、error。
 
     例外:
         FileNotFoundError: manifest 或噪音源不存在。
@@ -66,7 +73,7 @@ def make_degraded_set(
                    "target": np.nan, "measured": np.nan}
             if kind == "noise":
                 row.update(noise_env=pick_noise_env(cond_cfg, utt_seed), target=spec["snr_db"],
-                           measured=measure_snr(speech, written))
+                           measured=_snr_db(speech_component(speech, sr, cond, cond_cfg, utt_seed), written))
             elif kind == "volume":
                 row.update(target=spec["gain_db"], measured=_rms_db(written) - _rms_db(speech))
             elif kind == "reverb":
@@ -94,5 +101,11 @@ def make_degraded_set(
 
     log = pd.DataFrame(rows)
     log["error"] = log["measured"] - log["target"]
-    log.to_csv(out_root / LOG_NAME, index=False, encoding="utf-8", lineterminator="\n")
+    # 合併舊紀錄：只取代本次重新產生的條件，其他條件（例如前一輪的）保留
+    log_path = out_root / LOG_NAME
+    merged = log
+    if log_path.is_file():
+        old = pd.read_csv(log_path, encoding="utf-8", keep_default_na=False, na_values=[""])
+        merged = pd.concat([old[~old["condition"].isin(conditions)], log], ignore_index=True)
+    merged.to_csv(log_path, index=False, encoding="utf-8", lineterminator="\n")
     return log

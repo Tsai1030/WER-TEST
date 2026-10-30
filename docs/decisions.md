@@ -15,6 +15,32 @@
 
 ---
 
+## 2026-10-31：Round 2 範圍：負 SNR、loudnorm、較溫和的降噪
+- 決定：
+  - 新增條件 `snrm05`、`snrm10`（SNR −5 / −10 dB，m = minus），沿用同一組 DEMAND 噪音與每句相同的噪音片段；
+    修改 plan.md 6.5 命名規則（v0.6）、CLAUDE.md、dashboard/data_contract.md 與 sections.md。
+  - Round 2 矩陣：3 模型 × 6 方法（baseline、vad、denoise、loudnorm、vad+loudnorm、vad+denoise）
+    × 6 條件（clean、snr00、snrm05、snrm10、lowvol、noise_only），共 4,680 筆。
+  - Round 2 的 denoise 改為 noisereduce `prop_decrease: 0.5`（只壓低一半噪音），以 round2.yaml 的
+    `method_params` 設定，不修改 configs/methods/denoise.yaml，讓 Round 1 保持可重現。
+- 理由：
+  - Round 1 在 snr00 下 baseline WER 仍只有 3.0～5.3%，方法的改善空間不足，看不出方法在困難情境是否有效。
+  - Round 1 未測 loudnorm，lowvol 假設尚未驗證。
+  - noisereduce 預設（prop_decrease 1.0）在 clean 與 reverb 都顯著變差，推測完全壓除會造成失真；
+    0.5 為事先選定的值（未用 Round 2 資料調參），避免在測試集上挑參數。
+- 替代方案：
+  - 多人說話背景（babble）或殘響 + 噪音：使用者選擇只做負 SNR。
+  - 在留出資料上掃描 prop_decrease：較嚴謹但需另建資料集，本輪不做。
+  - Round 2 加入 reverb：whisper 需多約 1 小時，本輪不含，reverb 的結果見 Round 1。
+- 影響範圍：
+  - `library/export/schema.py`（CONDITION_NAMES）、`configs/conditions.yaml`、`configs/round2.yaml`。
+  - `library/runner/config.py`（method_params）、`runner.py`；`degrade_set.py` 改為合併 degrade_log.csv。
+  - Round 2 的 denoise 與 Round 1 的 denoise 參數不同，報告需分開註明（meta.json 的 methods 有記錄）。
+  - 兩輪的條件集合不同，「全條件 WER」不可跨輪比較。
+  - M2 的 SNR 驗證改為以已知語音成分精確計算（`degrade.speech_component`）：原本的 measure_snr 需估計增益，
+    負 SNR 時誤差放大（snrm10 最大 1.14 dB、平均僅 0.009 dB），屬量測誤差而非混音誤差；改後各 SNR 最大誤差 ≤ 0.001 dB。
+    重新產生的 clean / snr00 / lowvol / noise_only 與 Round 1 使用的音檔 SHA256 完全相同。
+
 ## 2026-10-30：M5 執行器設計
 - 續跑：已完成組合 = checkpoint.json ∪ results.csv 既有列。results.csv 逐列 flush，checkpoint 每 20 列與每個
   「模型 × 方法」結束時存檔（先寫 .tmp 再取代），中斷時也會存。即使「列已寫入、checkpoint 未存」也不會重複。

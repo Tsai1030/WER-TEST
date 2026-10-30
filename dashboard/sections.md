@@ -21,7 +21,9 @@
 | 延遲 | 單句 `latency_ms`（方法處理 + 模型辨識） |
 | RTF | `latency_ms / 1000 ÷ audio_sec` |
 
-「全條件 WER」：所有語音條件（clean、snr20、snr10、snr05、snr00、reverb、lowvol）合併計算整體 WER。
+「全條件 WER」：該輪所有語音條件（noise_only 以外，依 meta.json 的 `matrix.conditions`）合併計算整體 WER。
+各輪的條件集合不同（Round 1：clean、snr20、snr10、snr05、snr00、reverb、lowvol；Round 2：clean、snr00、snrm05、snrm10、lowvol），
+因此不同輪的全條件 WER 不可直接比較。
 
 ---
 
@@ -45,7 +47,7 @@
 
 | 區塊 | 內容 | 計算方式 |
 |---|---|---|
-| 抗噪曲線 | 各模型一張小圖（共用縱軸），橫軸 clean → snr20 → snr10 → snr05 → snr00，每個方法一條線 | 每點為該 model × method × condition 整體 WER |
+| 抗噪曲線 | 各模型一張小圖（共用縱軸），橫軸 clean → snr20 → snr10 → snr05 → snr00 → snrm05 → snrm10（只畫該輪存在的條件），每個方法一條線 | 每點為該 model × method × condition 整體 WER |
 | S / D / I 拆解 | 選定模型與條件下，各方法的錯誤組成（堆疊長條） | S/ΣN、D/ΣN、I/ΣN |
 | 幻覺率 | 模型 × 方法長條圖 | condition = noise_only 的幻覺率 |
 

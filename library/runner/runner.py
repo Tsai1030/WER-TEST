@@ -100,7 +100,7 @@ def _meta_extra(cfg: ExperimentConfig, speech: list[Utterance], noise: list[Utte
         "dataset": f"{cfg.dataset}, {n_female}+{len(speech) - n_female}, seed {cfg.seed}, + {len(noise)} noise-only",
         "normalizer": f"{cfg.normalizer}: whisper EnglishTextNormalizer + filler removal {list(EXTRA_FILLERS)}",
         "models": ckpt.models,
-        "methods": {spec: get_method(spec).describe() for spec in cfg.methods},
+        "methods": {spec: get_method(spec, cfg.method_params).describe() for spec in cfg.methods},
         "conditions": conditions,
         "matrix": {"models": cfg.models, "methods": cfg.methods, "conditions": cfg.conditions,
                    "n_speech": len(speech), "n_noise": len(noise)},
@@ -160,7 +160,7 @@ def run_experiment(cfg: ExperimentConfig, resume: bool = True) -> Path:
                 try:
                     for method_spec in pending:
                         bar.set_description(f"{model_name} {method_spec}")
-                        method = get_method(method_spec)
+                        method = get_method(method_spec, cfg.method_params)
                         method.load(cfg.device)
                         with ResourceMonitor() as mon:
                             for cond, u in todo[(model_name, method_spec)]:

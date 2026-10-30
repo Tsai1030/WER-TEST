@@ -9,6 +9,7 @@ from library.degrade.registry import (
     noise_bank,
     pick_noise_env,
     prevent_clipping,
+    speech_component,
 )
 from library.degrade.reverb import add_reverb, estimate_rt60, room_impulse_response
 from library.degrade.volume import change_volume
@@ -27,4 +28,5 @@ __all__ = [
     "pick_noise_env",
     "prevent_clipping",
     "room_impulse_response",
+    "speech_component",
 ]

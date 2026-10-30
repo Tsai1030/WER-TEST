@@ -84,6 +84,44 @@ def _condition_spec(cfg: dict, condition: str) -> dict:
     return spec
 
 
+def _noisy_mix(speech: np.ndarray, sr: int, spec: dict, cfg: dict, seed: int) -> np.ndarray:
+    """noise 條件防削波前的混合結果（apply_condition 與 speech_component 共用，確保兩者一致）。"""
+    rng = np.random.default_rng(seed)
+    bank = noise_bank(cfg)
+    _, mix_part, _, noise_sr = bank[int(rng.integers(len(bank)))]
+    if noise_sr != sr:
+        raise ValueError(f"噪音源取樣率 {noise_sr} 與語音 {sr} 不符")
+    return add_noise(speech, mix_part, spec["snr_db"], int(rng.integers(2**31)))
+
+
+def speech_component(speech: np.ndarray, sr: int, condition: str, cfg: dict, seed: int) -> np.ndarray:
+    """noise 條件輸出中的語音成分（乾淨語音 × 防削波增益），供驗證實際 SNR。
+
+    measure_snr 需估計增益，負 SNR 時估計誤差會放大（−10 dB 約 ±1 dB）；
+    已知語音成分時，實際 SNR = |語音成分|² ÷ |輸出 − 語音成分|²，不需估計。
+
+    參數:
+        speech: 乾淨語音（一維 float32）。
+        sr: 取樣率。
+        condition: noise 類型的條件名稱（例：snr10、snrm05）。
+        cfg: configs/conditions.yaml 讀入後的 dict。
+        seed: 每句的亂數種子（需與 apply_condition 相同）。
+
+    回傳:
+        語音成分（float64），長度與 speech 相同。
+
+    例外:
+        KeyError: 條件不存在。
+        ValueError: 條件類型不是 noise。
+    """
+    spec = _condition_spec(cfg, condition)
+    if spec["type"] != "noise":
+        raise ValueError(f"{condition} 不是 noise 條件")
+    m = float(np.max(np.abs(_noisy_mix(speech, sr, spec, cfg, seed))))
+    gain = CLIP_PEAK / m if m > CLIP_PEAK else 1.0
+    return speech.astype(np.float64) * gain
+
+
 def apply_condition(speech: np.ndarray, sr: int, condition: str, cfg: dict, seed: int) -> np.ndarray:
     """依條件名稱（clean / snr20 / reverb …）套用對應處理。
 
@@ -111,12 +149,7 @@ def apply_condition(speech: np.ndarray, sr: int, condition: str, cfg: dict, seed
     if kind == "clean":
         return speech.astype(np.float32)
     if kind == "noise":
-        rng = np.random.default_rng(seed)
-        bank = noise_bank(cfg)
-        _, mix_part, _, noise_sr = bank[int(rng.integers(len(bank)))]
-        if noise_sr != sr:
-            raise ValueError(f"噪音源取樣率 {noise_sr} 與語音 {sr} 不符")
-        return prevent_clipping(add_noise(speech, mix_part, spec["snr_db"], int(rng.integers(2**31))))
+        return prevent_clipping(_noisy_mix(speech, sr, spec, cfg, seed))
     if kind == "reverb":
         wet = add_reverb(
             speech,

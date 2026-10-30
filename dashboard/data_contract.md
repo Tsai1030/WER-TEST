@@ -104,9 +104,13 @@
 | 欄位 | 允許值 |
 |---|---|
 | model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
-| condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`reverb`、`lowvol`、`noise_only` |
+| condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`snrm05`、`snrm10`、`reverb`、`lowvol`、`noise_only` |
 | method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
 
+- `snrm05`、`snrm10` 為負 SNR（−5 / −10 dB，m = minus），Round 2 起出現；SNR 由高到低的順序為
+  snr20 → snr10 → snr05 → snr00 → snrm05 → snrm10。
+- 每一輪實際包含的條件與方法以該輪 meta.json 的 `matrix` 為準（Round 2 不含 snr20、snr10、snr05、reverb），
+  網頁不可假設固定的條件集合；同名方法在不同輪的參數可能不同，以 meta.json 的 `methods` 為準。
 - 組合方法的順序即處理順序（`vad+denoise` 為先 VAD 再降噪）。
 - 每個 model × condition 必須有 `baseline`，否則無法計算 ΔWER。
 

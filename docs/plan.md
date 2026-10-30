@@ -2,7 +2,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | v0.5（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4） |
+| 版本 | v0.6（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params） |
 | 日期 | 2026-10-30 |
 | 負責人 | Tsai |
 | 目標平台 | 開發：Windows 原生、**CPU only**（Intel i3-10110U、RAM 15.8GB、無獨立顯卡）；部署驗證：Jetson Orin Nano 8GB |
@@ -102,7 +102,7 @@
  └──────┬───────┘
         ▼
  ┌──────────────┐
- │ 2. 劣化產生   │  clean / snr20 / snr10 / snr05 / snr00 / reverb / lowvol  + noise_only
+ │ 2. 劣化產生   │  clean / snr20 … snr00 / snrm05 / snrm10 / reverb / lowvol  + noise_only
  └──────┬───────┘
         ▼
  ┌──────────────┐      ┌────────────────┐
@@ -642,8 +642,11 @@ def validate_results(results_dir: Path) -> list[str]: ...
 | 欄位 | 允許值 |
 |---|---|
 | model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
-| condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`reverb`、`lowvol`、`noise_only` |
+| condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`snrm05`、`snrm10`、`reverb`、`lowvol`、`noise_only` |
 | method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
+
+`snrm05`、`snrm10`（m = minus，SNR −5 / −10 dB）於 Round 1 後新增（v0.6，見 docs/decisions.md）：
+Round 1 在 snr00 下 baseline WER 仍 ≤ 5.3%，方法的改善空間不足。
 
 ---
 
@@ -693,6 +696,10 @@ normalizer: english
 save_processed: false
 ```
 
+**方法參數覆寫（v0.6）**：`method_params: {denoise: {impl: noisereduce, params: {...}}}` 會取代
+`configs/methods/<name>.yaml`，只作用於該輪（組合方法中的同名方法也套用）；實際參數寫入 meta.json 的 methods。
+如此修改某輪的方法參數不會改變前一輪的可重現性。
+
 ### 7.2 `configs/conditions.yaml`
 
 ```yaml
@@ -703,6 +710,8 @@ conditions:
   snr10:   { type: noise, snr_db: 10 }
   snr05:   { type: noise, snr_db: 5 }
   snr00:   { type: noise, snr_db: 0 }
+  snrm05:  { type: noise, snr_db: -5 }    # v0.6
+  snrm10:  { type: noise, snr_db: -10 }   # v0.6
   reverb:  { type: reverb, rt60: 0.6, room_dim: [5.0, 4.0, 3.0], src_mic_distance: 2.5 }
   lowvol:  { type: volume, gain_db: -20 }
   noise_only: { type: noise_only, n_clips: 10, clip_sec: 5.0 }
