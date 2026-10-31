@@ -15,6 +15,44 @@
 
 ---
 
+## 2026-10-31：VAD 參數掃描（原 Round 3，已停止）
+- 設定：configs/vad_tune.yaml、configs/conditions_tune.yaml
+- 範圍：granite-470m × 12 組 VAD 設定（不用 VAD、Silero 7 組、WebRTC 4 組）
+  × clean、snrm05、snrm10 × 50 句調參資料（女 25、男 25；seed 7，排除測試集說話者），
+  加上 noise_only 20 段（取自噪音疊加段，不用測試集的 holdout）
+- 執行：開發機 CPU，2026-10-31 10:49 → 11:40；結果 results/vad_tune/sweep.csv
+- 摘要：`uv run python scripts/06_vad_sweep.py --config configs/vad_tune.yaml --summary-only`
+- 選擇規則（執行前訂定）：噪音誤放行 ≤ 預設、clean WER ≤ 預設 + 0.5，其中 snrm10 WER 最低者
+
+### 觀察
+
+| 設定 | clean | snrm05 | snrm10 | snrm10 刪除數 D | 噪音誤放行 |
+|---|---|---|---|---|---|
+| 不用 VAD | 2.92% | 4.74% | 8.94% | 27 | — |
+| Silero 預設（threshold 0.5、pad 200 ms） | 3.28% | 6.02% | 17.15% | 72 | 0% |
+| Silero threshold 0.3 | 2.92% | 5.84% | 16.42% | 61 | 0% |
+| Silero threshold 0.2 | 2.92% | 5.84% | 14.05% | 53 | 5% |
+| Silero threshold 0.1 | 3.28% | 4.93% | 12.59% | 41 | 30% |
+| Silero threshold 0.3 + pad 400 ms（規則選出） | 2.74% | 5.47% | 15.69% | 55 | 0% |
+| WebRTC a0～a2 | 2.92～3.10% | 5.11～6.39% | 9.12～9.67% | 27 | 75～85% |
+| WebRTC a3 | 3.47% | 11.31% | 25.36% | 109 | 40% |
+
+- Silero 只要噪音誤放行維持 0%，snrm10 WER 仍為不用 VAD 的近兩倍；降低 threshold 可減少切除，但噪音開始放行。
+- WebRTC a0～a2 幾乎不切語音，但 75% 以上的純噪音段被放行，無法抑制幻覺。
+- 本調參資料中男女聲在 snrm10 都變差（預設：女 17.36%、男 16.96%），Round 2「只有女聲變差」未重現，
+  切除與否取決於句子與噪音片段，而非性別。
+- 推算「VAD 只當開關」（偵測到任何語音就送整段原音，否則輸出空白；由不用 VAD 的逐句結果推算，未實際執行）：
+  Silero threshold 0.3 的 snrm10 WER 為 9.85%（1 句整句未偵測到），clean 與 snrm05 與不用 VAD 相同，噪音誤放行 0%。
+
+### 結論
+- VAD 參數調整無法解決低 SNR 的語音切除；問題在「切片後串接」的用法，而非參數。
+- 機器人部署（喚醒詞後由 VAD 判斷講完）應採「開關／斷句」用法，不切除句中片段；斷句的截斷率與延遲留待部署階段驗證。
+- VAD 對語音條件的 WER 本來就沒有改善（Round 1、2），其效益只在抑制純噪音的幻覺；
+  研究目標是降低 WER，故停止 VAD 方向，不做原定的測試集驗證。
+
+### 下一步
+- Round 3 改測解碼層與文字層的方法（束搜尋、熱詞／上下文提示等），針對錯誤分析中的替換錯誤與專有名詞。
+
 ## 2026-10-31：Round 2（負 SNR、loudnorm、較溫和的降噪）
 - 設定：configs/round2.yaml（git commit：d453833）
 - 範圍：granite-470m、whisper-small、qwen3-asr-0.6b × baseline、vad、denoise、loudnorm、vad+loudnorm、vad+denoise
@@ -33,12 +71,16 @@
 | 模型 | snrm10 baseline | + vad | 刪除數 D（baseline → vad） | 女聲 WER | 男聲 WER |
 |---|---|---|---|---|---|
 | granite-470m | 6.26% | 10.82%（+4.55，顯著變差） | 15 → 38 | 8.1% → 17.4% | 4.5% → 4.5% |
-| qwen3-asr-0.6b | 7.78% | 11.39%（+3.61，顯著變差） | 9 → 37 | 7.4% → 15.5% | 8.2% → 7.4% |
+| qwen3-asr-0.6b | 7.78% | 11.39%（+3.61，邊界顯著，見下） | 9 → 37 | 7.4% → 15.5% | 8.2% → 7.4% |
 | whisper-small | 12.33% | 15.37%（+3.04，無顯著差異） | 4 → 31 | 17.4% → 24.0% | 7.4% → 7.1% |
 
 - 增加的錯誤幾乎都是刪除：Silero VAD 在 −10 dB 下把部分女聲語段判為非語音而切掉。
 - 整句被切光的只有每個模型 1 句，大多是部分切除。
 - 含 vad 的組合（vad+loudnorm、vad+denoise）在 snrm10 也都變差，幅度相近。
+- **顯著性的穩定度**：單一條件只有 50 句，CI 很寬。以結果網頁的另一組亂數重抽（同為 1000 次）重算時，
+  qwen 的 vad 與 vad+loudnorm（snrm10，CI 下限 +0.19）及 whisper 的 vad+denoise（snrm10，下限 +0.17）
+  的下限落到 0 附近，判定變為無顯著差異；Round 1 的 qwen vad+denoise（snr10，下限 +0.18）亦同。
+  這幾格應視為「邊界顯著」。granite 的 vad（snrm10，下限 +0.95）與整體（all）的判定不受影響。
 
 **較溫和的降噪：不再傷害，但仍無改善**
 - 整體 ΔWER：granite 0.00、whisper +0.15、qwen +0.04，皆無顯著差異（Round 1 預設參數：whisper +3.88、qwen +1.08，顯著變差）。

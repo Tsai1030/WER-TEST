@@ -15,6 +15,23 @@
 
 ---
 
+## 2026-10-31：停止 VAD 調參，Round 3 改測解碼層與文字層方法
+- 決定：
+  - VAD 參數掃描完成後停止 VAD 方向，不做原定的測試集驗證（三模型 × 選出的 VAD 設定）。
+  - Round 3 改為降低 WER 的解碼層與文字層方法；具體方法與設定另行規劃，需先修改 plan.md 6.5 的方法命名。
+  - VAD 掃描的工具（`impl: webrtc`、`sampling.exclude_manifest`、noise_only `segment: mix`、06_vad_sweep.py）保留，
+    供部署階段的斷句驗證使用。
+- 理由：
+  - 研究目標是降低 WER；兩輪結果顯示 VAD 不改善語音條件的 WER，只抑制純噪音的幻覺。
+  - 掃描顯示參數調整無法消除低 SNR 的切除（見 experiment_log 2026-10-31 VAD 參數掃描）。
+  - 機器人以喚醒詞啟動，ASR 只在喚醒後執行，幻覺的影響範圍較小；VAD 在部署時的角色是斷句。
+  - 錯誤分析：baseline 錯誤以替換為主，約 60% 為專有名詞，屬解碼與用詞問題，訊號前處理無法改善。
+- 替代方案：
+  - 完成 VAD 測試集驗證（約 2.3 小時）：使用者選擇直接轉向。
+  - TEN VAD：Python 版無 Linux aarch64（Jetson）套件，授權附加限制，掃描前即排除。
+- 影響範圍：`configs/vad_tune.yaml`、`configs/conditions_tune.yaml`、`library/methods/vad.py`、
+  `library/runner/vad_sweep.py`、`scripts/06_vad_sweep.py`、`library/data/sampler.py`、`library/degrade/registry.py`。
+
 ## 2026-10-31：Round 2 範圍：負 SNR、loudnorm、較溫和的降噪
 - 決定：
   - 新增條件 `snrm05`、`snrm10`（SNR −5 / −10 dB，m = minus），沿用同一組 DEMAND 噪音與每句相同的噪音片段；
