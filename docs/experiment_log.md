@@ -15,6 +15,58 @@
 
 ---
 
+## 2026-10-31：Round 2（負 SNR、loudnorm、較溫和的降噪）
+- 設定：configs/round2.yaml（git commit：d453833）
+- 範圍：granite-470m、whisper-small、qwen3-asr-0.6b × baseline、vad、denoise、loudnorm、vad+loudnorm、vad+denoise
+  × clean、snr00、snrm05、snrm10、lowvol、noise_only × 50 句（noise_only 10 段），共 4,680 列
+- 與 Round 1 的差異：新增 snrm05 / snrm10；denoise 為 noisereduce `prop_decrease: 0.5`（Round 1 為預設 1.0）；
+  不含 snr20 / snr10 / snr05 / reverb。兩輪「全條件 WER」的條件集合不同，不可直接比較
+- 執行：開發機 CPU fp32，2026-10-31 02:58 → 09:58（7 小時）；04_validate_results 通過；data/raw 不變
+- 摘要：`uv run python scripts/05_quick_report.py results/round2`
+
+### 觀察
+
+**負 SNR 下的 baseline WER**：snrm10 為 granite 6.26%、qwen 7.78%、whisper 12.33%，三個模型仍相當耐噪。
+
+**VAD 在 snrm10 顯著變差，且只發生在女聲**
+
+| 模型 | snrm10 baseline | + vad | 刪除數 D（baseline → vad） | 女聲 WER | 男聲 WER |
+|---|---|---|---|---|---|
+| granite-470m | 6.26% | 10.82%（+4.55，顯著變差） | 15 → 38 | 8.1% → 17.4% | 4.5% → 4.5% |
+| qwen3-asr-0.6b | 7.78% | 11.39%（+3.61，顯著變差） | 9 → 37 | 7.4% → 15.5% | 8.2% → 7.4% |
+| whisper-small | 12.33% | 15.37%（+3.04，無顯著差異） | 4 → 31 | 17.4% → 24.0% | 7.4% → 7.1% |
+
+- 增加的錯誤幾乎都是刪除：Silero VAD 在 −10 dB 下把部分女聲語段判為非語音而切掉。
+- 整句被切光的只有每個模型 1 句，大多是部分切除。
+- 含 vad 的組合（vad+loudnorm、vad+denoise）在 snrm10 也都變差，幅度相近。
+
+**較溫和的降噪：不再傷害，但仍無改善**
+- 整體 ΔWER：granite 0.00、whisper +0.15、qwen +0.04，皆無顯著差異（Round 1 預設參數：whisper +3.88、qwen +1.08，顯著變差）。
+- 各條件（含 snrm10）均無顯著改善。
+
+**loudnorm：無效果**
+- lowvol 的 ΔWER：granite −0.19、whisper −0.57、qwen −0.19，皆無顯著差異；整體 ΔWER 為 −0.04～+0.15。
+- 幻覺率：loudnorm 本身不降低幻覺（whisper 100%、qwen 80%）；vad+loudnorm 與 vad 相同（10%）。
+
+**幻覺率**：與 Round 1 一致，vad 使 whisper 與 qwen 由 100% 降到 10%（剩下的仍是 noise10）；
+granite + denoise 為 0%（noise10 經降噪後不再輸出）。
+
+**其他**
+- whisper-small 的 vad+loudnorm 在 clean 顯著變差（+1.33），vad+denoise 在 clean 也顯著變差（+0.95）；
+  原因未查（推測與 VAD 切除後語句邊界變化有關）。
+- Exp0：假錯誤占未正規化 WER 的 30～41%，與 Round 1 一致。
+
+### 結論
+- **Exp1（VAD）**：VAD 的價值只在抑制無語音時的幻覺；在極低 SNR（−10 dB）會切掉女聲語段，WER 顯著變差。
+- **Exp1（loudnorm）不成立**：三個模型對 −20 dB 音量已足夠穩健，loudnorm 無可量測效果。
+- **Exp2（降噪）不成立**：noisereduce 預設參數有害，減半壓制後無害但仍無改善，−10 dB 下亦然。
+- 綜合兩輪：這三個模型對穩態環境噪音與低音量相當穩健，訊號層前處理的改善空間很小；
+  VAD 應保留以抑制幻覺，但需處理極低 SNR 時的漏切。
+
+### 下一步（待討論，尚未決定）
+- 見對話中提出的 Round 3 方向：VAD 參數（threshold、pad）在低 SNR 的調整、文字層 / 解碼層方法（plan.md 第 2 章延後項目）、
+  更真實的噪音（人聲干擾、實機錄音）、Jetson q4 部署驗證。
+
 ## 2026-10-31：Round 1（Exp0 正規化、Exp1 VAD、Exp2 降噪）
 - 設定：configs/round1.yaml（git commit：0917be6；結果 commit a3c0a72）
 - 範圍：granite-470m、whisper-small、qwen3-asr-0.6b × baseline、vad、denoise、vad+denoise × 8 條件 × 50 句（女 25、男 25；noise_only 為 10 段），共 4,320 列
