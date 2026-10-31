@@ -1,0 +1,55 @@
+name: round3
+seed: 42
+device: cpu          # Jetson 上改為 cuda
+dtype: fp32          # Jetson 部署預計為 q4，以部署版本另行複驗（plan.md 11.5）
+num_threads: 4
+
+paths:
+  raw:                                 # 與 round1、round2 相同的抽樣（不重跑 01_prepare_data）
+    female: data/raw/female
+    male: data/raw/male
+  manifest: data/clean/manifest.csv
+  degraded_dir: data/degraded
+  output_dir: results/round3
+
+sampling:
+  tsv_name: test.tsv
+  n_per_gender: 25
+  min_sec: 3.0
+  max_sec: 8.0
+  min_words: 5
+  max_down_votes: 0
+  one_per_speaker: true
+
+models:
+  - granite-470m
+  # - parakeet-tdt-v2   # 暫緩：需 Linux 環境（NeMo）
+  - whisper-small
+  - qwen3-asr-0.6b
+
+# VAD 開關用法（gate）的測試集驗證；trim 用法的結果見 Round 2
+methods:
+  - baseline
+  - vad
+
+# 與 Round 2 相同，可直接對照 Round 2 的 vad（trim、threshold 0.5）
+conditions: [clean, snr00, snrm05, snrm10, lowvol, noise_only]
+
+# 只作用於本輪，取代 configs/methods/<name>.yaml（plan.md 7.1）
+method_params:
+  vad:
+    impl: silero
+    mode: gate           # 偵測到語音就送整段原音，不切除句中片段
+    threshold: 0.3       # 依 VAD 調參資料選定（不看測試集）：噪音誤放行 0% 且 snrm10 WER 最低（docs/decisions.md）
+    min_speech_ms: 250
+    min_silence_ms: 300
+    pad_ms: 200          # gate 模式下不影響輸出
+
+conditions_file: configs/conditions.yaml
+normalizer: english
+save_processed: false
+max_utterances: null   # 只取前 N 句語音（冒煙 / 除錯用）；null = 全部
+
+meta:                  # 寫入 meta.json
+  dataset: Common Voice Scripted Speech 26.0 American English (Female + Male) test
+  nano_budget_mb: 8192

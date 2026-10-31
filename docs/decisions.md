@@ -15,6 +15,19 @@
 
 ---
 
+## 2026-10-31：Round 3：VAD 開關用法（gate）的測試集驗證
+- 決定：
+  - VAD 新增 `mode: gate`：偵測到任何語音段就送整段原音，否則輸出空白；預設仍為 `trim`，Round 1、2 可重現。
+  - Round 3：3 模型 × baseline、vad（gate、Silero threshold 0.3）× Round 2 的 6 個條件。
+  - threshold 0.3 依 VAD 調參資料選定（不看測試集）：gate 推算下噪音誤放行 0%（與預設相同）且 snrm10 WER 最低
+    （0.3：9.85%；0.5：11.13%；0.2 以下噪音開始放行）。0.3 與 0.3 + pad 400 ms 在 gate 下相同，取參數較少者。
+- 理由：
+  - 機器人以喚醒詞啟動、由 VAD 判斷講完，不會切除句中片段，gate 較接近部署用法。
+  - 以 Round 2 測試集結果推算，gate 保留 VAD 抑制幻覺的效益（whisper、qwen 100% → 10%），WER 接近 baseline；
+    推算未實際執行，需以本輪確認。
+- 替代方案：沿用 threshold 0.5（Round 2 推算的 gate 結果即為此設定，可與本輪對照）。
+- 影響範圍：`library/methods/vad.py`、`configs/methods/vad.yaml`、`configs/round3.yaml`。
+
 ## 2026-10-31：停止 VAD 調參，Round 3 改測解碼層與文字層方法
 - 決定：
   - VAD 參數掃描完成後停止 VAD 方向，不做原定的測試集驗證（三模型 × 選出的 VAD 設定）。

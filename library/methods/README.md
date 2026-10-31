@@ -8,7 +8,7 @@
 | registry.py | get_method()、list_methods()、register_method()；未給設定時讀 configs/methods/<name>.yaml |
 | chain.py | MethodChain：依序串接，支援 "vad+denoise"；中途變成空音訊即停止 |
 | identity.py | baseline：原樣回傳 |
-| vad.py | VAD：保留語音段並串接；完全無語音時回傳空陣列。`impl: silero`（預設，權重內建於套件，CPU 執行）或 `webrtc`（webrtcvad，`aggressiveness` 0–3） |
+| vad.py | VAD：保留語音段並串接；完全無語音時回傳空陣列。`impl: silero`（預設，權重內建於套件，CPU 執行）或 `webrtc`（webrtcvad，`aggressiveness` 0–3）；`mode: trim`（預設，串接語音段）或 `gate`（偵測到語音就回傳整段原音） |
 | denoise.py | 降噪（noisereduce 非穩態頻譜閘控；原規劃 DeepFilterNet，因與新版 torchaudio 不相容而停用） |
 | loudnorm.py | 響度正規化到目標 LUFS（pyloudnorm）；短於 0.4 秒或整段靜音時原樣回傳 |
 

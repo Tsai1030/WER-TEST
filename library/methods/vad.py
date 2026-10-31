@@ -6,6 +6,7 @@ from library.methods.base import AudioMethod
 
 _SUPPORTED_SR = (8000, 16000)
 _IMPLS = ("silero", "webrtc")
+_MODES = ("trim", "gate")
 
 
 def frames_to_segments(
@@ -50,12 +51,15 @@ def frames_to_segments(
 
 
 class VADMethod(AudioMethod):
-    """VAD：只保留語音段（前後各保留 pad_ms），各段依序串接。
+    """VAD：偵測語音段，依 mode 處理。
+
+    - trim（預設）：只保留語音段（前後各保留 pad_ms），各段依序串接。
+    - gate：只當開關；偵測到任何語音段就原樣回傳整段音訊，不切除句中片段。
 
     參數來自 configs/methods/vad.yaml（或該輪設定檔的 method_params）：
-    impl（silero / webrtc，預設 silero）、threshold（silero）、aggressiveness（webrtc，0–3）、
-    min_speech_ms、min_silence_ms、pad_ms。
-    若判斷整段沒有語音，回傳長度為 0 的陣列；runner 收到空音訊時不呼叫模型（幻覺測試的關鍵）。
+    impl（silero / webrtc，預設 silero）、mode（trim / gate）、threshold（silero）、
+    aggressiveness（webrtc，0–3）、min_speech_ms、min_silence_ms、pad_ms。
+    兩種 mode 在判斷整段沒有語音時都回傳長度為 0 的陣列；runner 收到空音訊時不呼叫模型（幻覺測試的關鍵）。
     VAD 模型很小，一律在 CPU 執行。
     """
 
@@ -66,6 +70,9 @@ class VADMethod(AudioMethod):
         impl = self.config.setdefault("impl", "silero")
         if impl not in _IMPLS:
             raise ValueError(f"vad 不支援 impl：{impl}（可用：{_IMPLS}）")
+        mode = self.config.setdefault("mode", "trim")
+        if mode not in _MODES:
+            raise ValueError(f"vad 不支援 mode：{mode}（可用：{_MODES}）")
         self._model = None
 
     def load(self, device: str = "cpu") -> None:
@@ -122,7 +129,7 @@ class VADMethod(AudioMethod):
         return [(s["start"], s["end"]) for s in stamps]
 
     def process(self, wav: np.ndarray, sr: int) -> np.ndarray:
-        """偵測語音段並串接；無語音時回傳長度 0 的陣列。
+        """偵測語音段；trim 串接語音段、gate 原樣回傳整段；無語音時回傳長度 0 的陣列。
 
         例外:
             RuntimeError: 尚未呼叫 load()。
@@ -131,6 +138,8 @@ class VADMethod(AudioMethod):
         segs = self.segments(wav, sr)
         if not segs:
             return np.zeros(0, dtype=np.float32)
+        if self.config["mode"] == "gate":
+            return np.asarray(wav, dtype=np.float32)
         return np.concatenate([wav[s:e] for s, e in segs]).astype(np.float32)
 
     def unload(self) -> None:

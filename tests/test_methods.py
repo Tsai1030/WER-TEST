@@ -113,6 +113,17 @@ def test_webrtc_vad_and_bad_impl() -> None:
         get_method("vad", {"vad": {"impl": "magic"}})
 
 
+def test_vad_gate_keeps_whole_audio_or_nothing() -> None:
+    vad = get_method("vad", {"vad": {"impl": "silero", "mode": "gate"}})
+    vad.load("cpu")
+    assert len(vad.process(np.zeros(SR * 2, dtype=np.float32), SR)) == 0
+    vad.segments = lambda wav, sr: [(100, 200)]  # 只偵測到一小段語音：gate 仍回傳整段
+    wav = _white(1.0, 0.1)
+    assert np.array_equal(vad.process(wav, SR), wav)
+    with pytest.raises(ValueError, match="mode"):
+        get_method("vad", {"vad": {"mode": "magic"}})
+
+
 def test_chain_stops_on_empty() -> None:
     chain = get_method("vad+denoise")
     chain.load("cpu")

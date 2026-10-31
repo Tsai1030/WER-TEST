@@ -10,6 +10,7 @@ import yaml
 
 from library.data import MANIFEST_COLUMNS
 from library.export import validate_results
+from library.methods import get_method
 from library.models import ASRModel, Transcript
 from library.runner import (
     Checkpoint,
@@ -212,6 +213,14 @@ def test_load_config_round2() -> None:
     assert cfg.conditions == ["clean", "snr00", "snrm05", "snrm10", "lowvol", "noise_only"]
     assert {"loudnorm", "vad+loudnorm"} <= set(cfg.methods)
     assert cfg.method_params["denoise"]["params"] == {"prop_decrease": 0.5}
+
+
+def test_load_config_round3() -> None:
+    cfg = load_config("configs/round3.yaml")
+    assert cfg.output_dir.name == "round3"
+    assert cfg.methods == ["baseline", "vad"]
+    assert cfg.method_params["vad"]["mode"] == "gate"
+    assert get_method("vad", cfg.method_params).config["threshold"] == 0.3
 
 
 @pytest.mark.parametrize(
