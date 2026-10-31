@@ -1,0 +1,3 @@
+name: beam
+decoding:
+  beam_size: 5      # 束搜尋寬度；只覆寫模型設定檔 decoding 中的同名參數

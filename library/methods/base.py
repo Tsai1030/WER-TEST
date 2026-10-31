@@ -50,6 +50,10 @@ class AudioMethod(ABC):
     def unload(self) -> None:
         """釋放 load() 載入的資源；不需模型的方法使用此預設實作（不做事）。"""
 
+    def decoding(self) -> dict:
+        """回傳此方法要覆寫的模型解碼參數（例：{"beam_size": 5}）；音訊方法回傳 {}。"""
+        return {}
+
     def describe(self) -> dict:
         """回傳方法名稱與參數，寫入 meta.json。"""
         return {"name": self.name, **self.config}

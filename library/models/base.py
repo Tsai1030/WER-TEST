@@ -44,6 +44,7 @@ class ASRModel(ABC):
 
     name: str
     framework: str
+    supported_decoding: tuple[str, ...] = ()  # 可由解碼方法覆寫的參數（例：beam_size）
 
     def __init__(self, config: dict) -> None:
         """參數:
@@ -54,6 +55,7 @@ class ASRModel(ABC):
         self.dtype = "fp32"
         self._model: Any = None
         self._processor: Any = None
+        self._decoding_overrides: dict = {}
 
     @property
     def hf_id(self) -> str:
@@ -64,6 +66,25 @@ class ASRModel(ABC):
     def revision(self) -> str | None:
         """設定檔中鎖定的 Hugging Face 版本（commit hash）；None 表示使用最新版。"""
         return self.config.get("revision")
+
+    @property
+    def decoding(self) -> dict:
+        """實際使用的解碼參數：設定檔的 decoding，再套用 set_decoding() 的覆寫。"""
+        return {**(self.config.get("decoding") or {}), **self._decoding_overrides}
+
+    def set_decoding(self, overrides: dict) -> None:
+        """設定解碼參數覆寫（由 runner 依方法設定；{} 表示回到設定檔預設）。
+
+        參數:
+            overrides: 例：{"beam_size": 5}。
+
+        例外:
+            ValueError: 含本模型不支援的參數（見 supported_decoding）。
+        """
+        bad = sorted(set(overrides) - set(self.supported_decoding))
+        if bad:
+            raise ValueError(f"{self.name} 不支援解碼參數 {bad}（可覆寫：{list(self.supported_decoding)}）")
+        self._decoding_overrides = dict(overrides)
 
     def _require_loaded(self) -> None:
         if self._model is None:

@@ -33,6 +33,18 @@ def test_enabled_models_construct_without_loading(name: str) -> None:
         model.transcribe(np.zeros(16000, dtype=np.float32), 16000)
 
 
+def test_decoding_override_and_unsupported() -> None:
+    whisper = get_model("whisper-small")
+    assert whisper.decoding["beam_size"] == 5
+    whisper.set_decoding({"beam_size": 1})
+    assert whisper.decoding["beam_size"] == 1 and whisper.decoding["temperature"] == 0.0
+    whisper.set_decoding({})
+    assert whisper.decoding["beam_size"] == 5
+    assert "beam_size" not in get_model("qwen3-asr-0.6b").decoding  # 預設 greedy（num_beams 1）
+    with pytest.raises(ValueError, match="不支援"):
+        get_model("granite-470m").set_decoding({"beam_size": 5})  # CTC greedy，無解碼參數
+
+
 def test_resolve_device_falls_back_to_cpu() -> None:
     import torch
 

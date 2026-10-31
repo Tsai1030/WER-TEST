@@ -15,6 +15,25 @@
 
 ---
 
+## 2026-10-31：新增解碼方法 beam / greedy 與設定檔 exclude（plan.md v0.7）
+- 決定：
+  - 方法命名新增 `beam`、`greedy`（plan.md 6.5、CLAUDE.md、dashboard/data_contract.md）。解碼方法不改變音訊，
+    只覆寫模型的 `beam_size`（configs/methods/beam.yaml：5；greedy.yaml：1）。
+  - 設定檔新增 `exclude`，列出不執行的「模型 × 方法」；load_config 檢查未排除的組合中模型支援該解碼參數。
+  - 加入 Round 3（同一個結果資料夾，共用 baseline）：qwen3-asr × beam、whisper-small × greedy。
+    granite 為 CTC，generate() 即 argmax，無解碼參數可調，不納入。
+- 理由：
+  - 兩輪結果顯示音訊前處理無法降低 WER；錯誤以替換為主，屬解碼與用詞問題。
+  - 機器人喚醒後為自由對話，熱詞清單無法事先列出，先測不需要詞彙的解碼參數。
+  - whisper greedy 量測 beam 5 的效益與延遲代價（Jetson 上 greedy 較快）。
+- 替代方案：
+  - granite + n-gram 語言模型（pyctcdecode + KenLM）：KenLM 在 PyPI 只有原始碼，Windows 需自行編譯 C++，
+    延到 Linux（Jetson / WSL）。
+  - 熱詞 / 上下文提示（qwen 的 prompt、whisper 的 prompt_ids）：適合固定詞彙，自由對話價值較低，暫緩。
+- 影響範圍：`library/export/schema.py`、`library/methods/decoding.py`、`library/models/base.py`、
+  `whisper.py`、`qwen3_asr.py`（num_beams）、`library/runner/config.py`、`matrix.py`、`runner.py`、
+  `library/export/validate.py`、`configs/round3.yaml`。
+
 ## 2026-10-31：Round 3：VAD 開關用法（gate）的測試集驗證
 - 決定：
   - VAD 新增 `mode: gate`：偵測到任何語音段就送整段原音，否則輸出空白；預設仍為 `trim`，Round 1、2 可重現。

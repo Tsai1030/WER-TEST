@@ -1,0 +1,3 @@
+name: greedy
+decoding:
+  beam_size: 1      # 貪婪解碼；只覆寫模型設定檔 decoding 中的同名參數

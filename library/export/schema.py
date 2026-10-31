@@ -16,7 +16,10 @@ CONDITION_NAMES: tuple[str, ...] = (
     "lowvol",
     "noise_only",
 )
-METHOD_NAMES: tuple[str, ...] = ("baseline", "vad", "denoise", "loudnorm")  # 組合以 '+' 連接
+METHOD_NAMES: tuple[str, ...] = (
+    "baseline", "vad", "denoise", "loudnorm",
+    "beam", "greedy",  # 解碼方法：不改音訊，只覆寫模型的解碼參數（Round 3 起）
+)  # 組合以 '+' 連接
 
 
 @dataclass

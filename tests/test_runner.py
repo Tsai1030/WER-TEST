@@ -1,6 +1,8 @@
 """library.runner：設定讀取、矩陣展開、完整執行、中斷續跑、--no-resume（以假模型與合成資料執行）。"""
 
+import json
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -30,12 +32,14 @@ REF = "the cat sat down"  # 避免數字詞：Whisper normalizer 會把 "one two
 
 
 class FakeModel(ASRModel):
-    """回傳固定文字的假模型；crash_after 次辨識後丟出例外，模擬中斷。"""
+    """回傳固定文字的假模型；crash_after 次辨識後丟出例外，模擬中斷；beams 記錄每次辨識的 beam_size。"""
 
     framework = "fake"
+    supported_decoding = ("beam_size",)
     loads = 0
     calls = 0
     crash_after: int | None = None
+    beams: ClassVar[list] = []
 
     def __init__(self, name: str) -> None:
         super().__init__({"hf_id": "fake/fake", "decoding": {"strategy": "greedy"}})
@@ -50,6 +54,7 @@ class FakeModel(ASRModel):
         if FakeModel.crash_after is not None and FakeModel.calls >= FakeModel.crash_after:
             raise RuntimeError("模擬中斷")
         FakeModel.calls += 1
+        FakeModel.beams.append(self.decoding.get("beam_size"))
         return Transcript(text="the cat sat")
 
     def weights_size_mb(self) -> float | None:
@@ -59,6 +64,7 @@ class FakeModel(ASRModel):
 @pytest.fixture
 def cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExperimentConfig:
     FakeModel.loads = FakeModel.calls = 0
+    FakeModel.beams = []
     FakeModel.crash_after = None
     monkeypatch.setattr(runner_module, "get_model", lambda name, config=None: FakeModel(name))
 
@@ -183,6 +189,41 @@ def test_method_params_override_reaches_method_and_meta(cfg: ExperimentConfig) -
     assert '"target_lufs": -16.0' in meta
 
 
+def test_decoding_method_and_exclude(cfg: ExperimentConfig) -> None:
+    cfg.models = ["granite-470m", "whisper-small"]
+    cfg.methods = ["baseline", "beam", "greedy"]
+    cfg.exclude = [("granite-470m", "greedy"), ("whisper-small", "beam")]
+    out = run_experiment(cfg)
+    assert validate_results(out) == []
+    df = _results(cfg)
+    assert sorted(set(map(tuple, df[["model", "method"]].drop_duplicates().to_numpy()))) == [
+        ("granite-470m", "baseline"), ("granite-470m", "beam"),
+        ("whisper-small", "baseline"), ("whisper-small", "greedy")]
+    # 每個 (模型, 方法) 5 次辨識：baseline 不覆寫（None）、beam 5、baseline、greedy 1
+    assert FakeModel.beams == [None] * 5 + [5] * 5 + [None] * 5 + [1] * 5
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["matrix"]["exclude"] == [["granite-470m", "greedy"], ["whisper-small", "beam"]]
+
+
+def test_load_config_exclude_and_unsupported_decoding(tmp_path: Path) -> None:
+    raw = yaml.safe_load(Path("configs/round1.yaml").read_text(encoding="utf-8"))
+    raw["methods"] = ["baseline", "beam"]
+    path = tmp_path / "r.yaml"
+    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ValueError, match="granite-470m 不支援 beam"):
+        load_config(path)
+    raw["exclude"] = [{"model": "granite-470m", "method": "beam"}, {"model": "whisper-small", "method": "beam"}]
+    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    assert load_config(path).exclude == [("granite-470m", "beam"), ("whisper-small", "beam")]
+    for bad, match in (([{"model": "granite-470m", "method": "baseline"}], "baseline"),
+                       ([{"model": "granite-470m", "method": "vad"}], "不在本輪"),
+                       ([{"model": "granite-470m"}], "model, method")):
+        raw["exclude"] = bad
+        path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+        with pytest.raises(ValueError, match=match):
+            load_config(path)
+
+
 def test_vad_sweep_rows_resume_and_summary(cfg: ExperimentConfig, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(vad_sweep, "get_model", lambda name, config=None: FakeModel(name))
     variants = {"default": {"impl": "silero"}, "webrtc_a3": {"impl": "webrtc", "aggressiveness": 3}}
@@ -218,7 +259,8 @@ def test_load_config_round2() -> None:
 def test_load_config_round3() -> None:
     cfg = load_config("configs/round3.yaml")
     assert cfg.output_dir.name == "round3"
-    assert cfg.methods == ["baseline", "vad"]
+    assert cfg.methods == ["baseline", "vad", "beam", "greedy"]
+    assert ("whisper-small", "beam") in cfg.exclude and ("qwen3-asr-0.6b", "greedy") in cfg.exclude
     assert cfg.method_params["vad"]["mode"] == "gate"
     assert get_method("vad", cfg.method_params).config["threshold"] == 0.3
 

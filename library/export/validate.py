@@ -124,9 +124,8 @@ def _check_meta(meta: dict, results: pd.DataFrame | None) -> list[str]:
     if m and results is not None and tuple(results.columns) == RESULT_COLUMNS:
         n_speech_conds = sum(c != "noise_only" for c in m["conditions"])
         n_noise_conds = len(m["conditions"]) - n_speech_conds
-        expected = len(m["models"]) * len(m["methods"]) * (
-            n_speech_conds * m["n_speech"] + n_noise_conds * m["n_noise"]
-        )
+        n_pairs = len(m["models"]) * len(m["methods"]) - len(m.get("exclude", []))
+        expected = n_pairs * (n_speech_conds * m["n_speech"] + n_noise_conds * m["n_noise"])
         if len(results) != expected:
             p.append(f"results.csv 列數 {len(results)}，依 meta.matrix 應為 {expected}（是否尚未跑完？）")
     return p

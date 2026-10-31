@@ -1,6 +1,7 @@
 # library/methods/
 
-音訊前處理方法（實驗變因）。所有方法都繼承 AudioMethod，介面為 process(wav, sr) → wav。
+音訊前處理方法與解碼方法（實驗變因）。所有方法都繼承 AudioMethod，介面為 process(wav, sr) → wav；
+解碼方法另以 decoding() 回傳模型解碼參數的覆寫（音訊方法回傳 {}）。
 
 | 檔案 | 做什麼 |
 |---|---|
@@ -10,6 +11,7 @@
 | identity.py | baseline：原樣回傳 |
 | vad.py | VAD：保留語音段並串接；完全無語音時回傳空陣列。`impl: silero`（預設，權重內建於套件，CPU 執行）或 `webrtc`（webrtcvad，`aggressiveness` 0–3）；`mode: trim`（預設，串接語音段）或 `gate`（偵測到語音就回傳整段原音） |
 | denoise.py | 降噪（noisereduce 非穩態頻譜閘控；原規劃 DeepFilterNet，因與新版 torchaudio 不相容而停用） |
+| decoding.py | 解碼方法 beam / greedy：音訊原樣回傳，decoding() 回傳要覆寫的模型解碼參數（`beam_size`），由 runner 傳給模型 |
 | loudnorm.py | 響度正規化到目標 LUFS（pyloudnorm）；短於 0.4 秒或整段靜音時原樣回傳 |
 
 ## 範例

@@ -2,7 +2,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | v0.6（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params） |
+| 版本 | v0.7（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params；Round 2 後：VAD 開關用法 mode: gate、解碼方法 beam / greedy、設定檔 exclude） |
 | 日期 | 2026-10-30 |
 | 負責人 | Tsai |
 | 目標平台 | 開發：Windows 原生、**CPU only**（Intel i3-10110U、RAM 15.8GB、無獨立顯卡）；部署驗證：Jetson Orin Nano 8GB |
@@ -643,10 +643,12 @@ def validate_results(results_dir: Path) -> list[str]: ...
 |---|---|
 | model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
 | condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`snrm05`、`snrm10`、`reverb`、`lowvol`、`noise_only` |
-| method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
+| method | `baseline`、`vad`、`denoise`、`loudnorm`、`beam`、`greedy`；組合以 `+` 連接，如 `vad+denoise`（`beam` / `greedy` 為解碼方法，Round 3 起） |
 
 `snrm05`、`snrm10`（m = minus，SNR −5 / −10 dB）於 Round 1 後新增（v0.6，見 docs/decisions.md）：
 Round 1 在 snr00 下 baseline WER 仍 ≤ 5.3%，方法的改善空間不足。
+
+`beam`、`greedy`（解碼方法）於 Round 2 後新增（v0.7，見 docs/decisions.md）：兩輪結果顯示音訊前處理無法降低 WER，改測解碼參數。解碼方法不改變音訊，只覆寫模型的解碼參數（`beam_size`）；模型不支援或與 baseline 相同的組合以設定檔的 `exclude` 排除。
 
 ---
 
@@ -699,6 +701,10 @@ save_processed: false
 **方法參數覆寫（v0.6）**：`method_params: {denoise: {impl: noisereduce, params: {...}}}` 會取代
 `configs/methods/<name>.yaml`，只作用於該輪（組合方法中的同名方法也套用）；實際參數寫入 meta.json 的 methods。
 如此修改某輪的方法參數不會改變前一輪的可重現性。
+
+**排除組合（v0.7）**：`exclude: [{model: whisper-small, method: beam}]` 列出不執行的「模型 × 方法」，
+用於解碼方法與該模型 baseline 相同（whisper 的 baseline 已是 beam 5）或模型不支援（granite 為 CTC greedy）的情況。
+`baseline` 不可排除；排除清單寫入 meta.json 的 matrix.exclude，04_validate_results 依此計算應有列數。
 
 ### 7.2 `configs/conditions.yaml`
 
@@ -781,6 +787,9 @@ pad_ms: 200          # 語音段前後保留，避免吃掉句首句尾
 | denoise | noisereduce（原規劃 DeepFilterNet；M0 實測 0.5.6 與新版 torchaudio 不相容，改用備案） | 預設 | 低 SNR 改善；高 SNR 可能變差 |
 | loudnorm | pyloudnorm 正規化到 −23 LUFS | 目標響度 | 改善 lowvol 條件 |
 | vad+denoise | 先 VAD 再降噪 | — | 兩者疊加效果 |
+| vad（`mode: gate`，Round 3） | 偵測到語音就送整段原音，否則輸出空白 | threshold 0.3 | 保留抑制幻覺的效益，不切除句中語音 |
+| beam（Round 3） | 束搜尋（qwen3-asr；whisper 的 baseline 已是 beam 5） | beam_size 5 | 減少替換錯誤 |
+| greedy（Round 3） | 貪婪解碼（whisper） | beam_size 1 | 量測 beam 5 對 whisper 的效益與延遲代價 |
 
 ### 8.4 各實驗的假設與判讀
 

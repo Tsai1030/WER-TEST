@@ -24,7 +24,7 @@
 |---|---|
 | model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
 | condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`snrm05`、`snrm10`、`reverb`、`lowvol`、`noise_only`（`snrm` = 負 SNR，Round 2 起） |
-| method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
+| method | `baseline`、`vad`、`denoise`、`loudnorm`、`beam`、`greedy`；組合以 `+` 連接，如 `vad+denoise`（`beam` / `greedy` 為解碼方法，Round 3 起） |
 
 ## 分層原則（plan.md 4.1）
 

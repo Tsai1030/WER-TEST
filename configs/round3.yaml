@@ -27,10 +27,20 @@ models:
   - whisper-small
   - qwen3-asr-0.6b
 
-# VAD 開關用法（gate）的測試集驗證；trim 用法的結果見 Round 2
+# A：VAD 開關用法（gate）的測試集驗證（trim 用法的結果見 Round 2）
+# B：解碼方法（beam：qwen 由 greedy 改 beam 5；greedy：whisper 由 beam 5 改 greedy）
 methods:
   - baseline
   - vad
+  - beam
+  - greedy
+
+# 不執行的組合：解碼參數與 baseline 相同，或模型不支援（granite 為 CTC greedy，無解碼參數）
+exclude:
+  - { model: granite-470m, method: beam }
+  - { model: granite-470m, method: greedy }
+  - { model: whisper-small, method: beam }      # baseline 已是 beam 5
+  - { model: qwen3-asr-0.6b, method: greedy }   # baseline 已是 greedy
 
 # 與 Round 2 相同，可直接對照 Round 2 的 vad（trim、threshold 0.5）
 conditions: [clean, snr00, snrm05, snrm10, lowvol, noise_only]

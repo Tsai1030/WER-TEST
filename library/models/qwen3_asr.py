@@ -11,13 +11,14 @@ from library.utils.device import resolve_device
 
 
 class Qwen3ASRModel(ASRModel):
-    """Qwen3-ASR-0.6B：Audio-LLM，greedy 解碼。
+    """Qwen3-ASR-0.6B：Audio-LLM，預設 greedy 解碼（beam_size 可由解碼方法覆寫）。
 
     config 的 language（例：English）以 processor 預填 "language <NAME><asr_text>" 強制語言；
     設 null 則由模型自動偵測，偵測結果放在 Transcript.language。
     """
 
     name = "qwen3-asr-0.6b"
+    supported_decoding = ("beam_size",)
     framework = "transformers"
 
     def load(self, device: str = "cpu", dtype: str = "fp32", num_threads: int = 4) -> None:
@@ -45,12 +46,15 @@ class Qwen3ASRModel(ASRModel):
         import torch
 
         language = self.config.get("language")
-        decoding = self.config.get("decoding", {})
+        decoding = self.decoding
         inputs = self._processor.apply_transcription_request(audio=wav, language=language)
         inputs = inputs.to(self.device, dtype=self._model.dtype)
         with torch.inference_mode():
             out = self._model.generate(
-                **inputs, do_sample=False, max_new_tokens=decoding.get("max_new_tokens", 512)
+                **inputs,
+                do_sample=False,
+                num_beams=decoding.get("beam_size", 1),  # 設定檔預設 greedy；beam 方法覆寫為 5
+                max_new_tokens=decoding.get("max_new_tokens", 512),
             )
         new_tokens = out[0, inputs["input_ids"].shape[1] :]
         if language is not None:  # 強制語言，不回報偵測語言

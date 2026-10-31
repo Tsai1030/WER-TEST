@@ -103,7 +103,8 @@ def _meta_extra(cfg: ExperimentConfig, speech: list[Utterance], noise: list[Utte
         "methods": {spec: get_method(spec, cfg.method_params).describe() for spec in cfg.methods},
         "conditions": conditions,
         "matrix": {"models": cfg.models, "methods": cfg.methods, "conditions": cfg.conditions,
-                   "n_speech": len(speech), "n_noise": len(noise)},
+                   "n_speech": len(speech), "n_noise": len(noise),
+                   "exclude": [list(p) for p in cfg.exclude]},
         "resumed": resumed,
     }
 
@@ -113,7 +114,8 @@ def run_experiment(cfg: ExperimentConfig, resume: bool = True) -> Path:
 
     - 劣化音檔從 cfg.degraded_dir 讀取（預先產生，不即時產生）。
     - 方法回傳空音訊時不呼叫模型，直接記錄空字串 hyp。
-    - 每換一個方法重設峰值記憶體統計；每個模型結束後 unload。
+    - 每換一個方法重設峰值記憶體統計，並把方法的解碼參數覆寫傳給模型；每個模型結束後 unload。
+    - cfg.exclude 中的「模型 × 方法」不執行。
     - cfg.save_processed 為 true 時才把方法處理後的音訊存檔。
     - 續跑：已完成的組合 = checkpoint.json ∪ results.csv 中已有的列，不會重複寫入。
       完全跑完的模型不會再載入；其資源量測與描述取自 checkpoint。
@@ -162,6 +164,7 @@ def run_experiment(cfg: ExperimentConfig, resume: bool = True) -> Path:
                         bar.set_description(f"{model_name} {method_spec}")
                         method = get_method(method_spec, cfg.method_params)
                         method.load(cfg.device)
+                        model.set_decoding(method.decoding())  # 解碼方法覆寫 beam_size；音訊方法為 {}
                         with ResourceMonitor() as mon:
                             for cond, u in todo[(model_name, method_spec)]:
                                 writer.write(_run_one(cfg, model, method, method_spec, cond, u, normalizer))
@@ -171,6 +174,7 @@ def run_experiment(cfg: ExperimentConfig, resume: bool = True) -> Path:
                                 if written % _SAVE_EVERY == 0:
                                     ckpt.save()
                         method.unload()
+                        model.set_decoding({})
                         ckpt.resources[f"{model_name}|{method_spec}"] = asdict(ResourceRow(
                             model=model_name, method=method_spec, peak_gpu_mb=mon.peak_gpu_mb,
                             peak_ram_mb=round(mon.peak_ram_mb, 1), model_size_mb=size_mb,

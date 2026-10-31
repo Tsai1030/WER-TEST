@@ -1,4 +1,4 @@
-"""library.methods：baseline、VAD、降噪、響度正規化、組合與註冊表（不需下載模型）。"""
+"""library.methods：baseline、VAD、降噪、響度正規化、解碼方法、組合與註冊表（不需下載模型）。"""
 
 import numpy as np
 import pytest
@@ -122,6 +122,17 @@ def test_vad_gate_keeps_whole_audio_or_nothing() -> None:
     assert np.array_equal(vad.process(wav, SR), wav)
     with pytest.raises(ValueError, match="mode"):
         get_method("vad", {"vad": {"mode": "magic"}})
+
+
+def test_decoding_methods_pass_audio_and_override_beam() -> None:
+    wav = _tone(0.5)
+    assert get_method("beam").decoding() == {"beam_size": 5}
+    assert get_method("greedy").decoding() == {"beam_size": 1}
+    assert np.array_equal(get_method("beam").process(wav, SR), wav)
+    assert get_method("baseline").decoding() == {} and get_method("vad").decoding() == {}
+    assert get_method("vad+beam").decoding() == {"beam_size": 5}
+    with pytest.raises(ValueError, match="衝突"):
+        get_method("beam+greedy").decoding()
 
 
 def test_chain_stops_on_empty() -> None:

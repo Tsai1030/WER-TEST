@@ -23,6 +23,7 @@ class WhisperModel(ASRModel):
     """
 
     name = "whisper-small"
+    supported_decoding = ("beam_size",)
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)
@@ -67,7 +68,7 @@ class WhisperModel(ASRModel):
             return self._transcribe_faster_whisper(wav, sr)
         import torch
 
-        decoding = self.config.get("decoding", {})
+        decoding = self.decoding
         inputs = self._processor(wav, sampling_rate=sr, return_tensors="pt")
         features = inputs.input_features.to(self.device, dtype=self._model.dtype)
         temperature = decoding.get("temperature", 0.0)
@@ -86,7 +87,7 @@ class WhisperModel(ASRModel):
     def _transcribe_faster_whisper(self, wav: np.ndarray, sr: int) -> Transcript:
         if sr != 16000:
             raise ValueError(f"faster-whisper 需要 16kHz 音訊，實際為 {sr}")
-        decoding = self.config.get("decoding", {})
+        decoding = self.decoding
         segments, info = self._model.transcribe(
             wav.astype(np.float32),
             language=self.config.get("language"),

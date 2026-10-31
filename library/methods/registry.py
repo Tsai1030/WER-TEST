@@ -2,6 +2,7 @@
 
 from library.methods.base import AudioMethod
 from library.methods.chain import MethodChain
+from library.methods.decoding import BeamMethod, GreedyMethod
 from library.methods.denoise import DenoiseMethod
 from library.methods.identity import IdentityMethod
 from library.methods.loudnorm import LoudnormMethod
@@ -65,5 +66,5 @@ def register_method(name: str, cls: type[AudioMethod]) -> None:
     _REGISTRY[name] = cls
 
 
-for _cls in (IdentityMethod, VADMethod, DenoiseMethod, LoudnormMethod):
+for _cls in (IdentityMethod, VADMethod, DenoiseMethod, LoudnormMethod, BeamMethod, GreedyMethod):
     register_method(_cls.name, _cls)

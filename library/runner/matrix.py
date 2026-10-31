@@ -57,6 +57,8 @@ def iter_matrix(cfg: ExperimentConfig) -> Iterator[tuple[str, str, str, Utteranc
             raise FileNotFoundError(f"劣化音檔資料夾不存在：{cfg.degraded_dir / cond}（請先執行 02_make_degraded.py）")
     for model in cfg.models:
         for method in cfg.methods:
+            if (model, method) in cfg.exclude:  # 解碼方法與 baseline 相同或模型不支援
+                continue
             for cond in cfg.conditions:
                 for u in noise if cond == "noise_only" else speech:
                     yield model, method, cond, u

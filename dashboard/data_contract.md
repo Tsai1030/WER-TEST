@@ -105,7 +105,7 @@
 |---|---|
 | model | `granite-470m`、`whisper-small`、`qwen3-asr-0.6b`（`parakeet-tdt-v2` 保留名稱，暫不使用） |
 | condition | `clean`、`snr20`、`snr10`、`snr05`、`snr00`、`snrm05`、`snrm10`、`reverb`、`lowvol`、`noise_only` |
-| method | `baseline`、`vad`、`denoise`、`loudnorm`；組合以 `+` 連接，如 `vad+denoise` |
+| method | `baseline`、`vad`、`denoise`、`loudnorm`、`beam`、`greedy`；組合以 `+` 連接，如 `vad+denoise`（`beam` / `greedy` 為解碼方法，Round 3 起） |
 
 - `snrm05`、`snrm10` 為負 SNR（−5 / −10 dB，m = minus），Round 2 起出現；SNR 由高到低的順序為
   snr20 → snr10 → snr05 → snr00 → snrm05 → snrm10。

@@ -44,6 +44,20 @@ class MethodChain(AudioMethod):
         for m in self.methods:
             m.unload()
 
+    def decoding(self) -> dict:
+        """合併各方法的解碼參數覆寫。
+
+        例外:
+            ValueError: 兩個方法對同一參數給出不同值（例：beam+greedy）。
+        """
+        merged: dict = {}
+        for m in self.methods:
+            for k, v in m.decoding().items():
+                if k in merged and merged[k] != v:
+                    raise ValueError(f"{self.name}：解碼參數 {k} 衝突（{merged[k]} vs {v}）")
+                merged[k] = v
+        return merged
+
     def describe(self) -> dict:
         """回傳組合名稱與各方法的設定。"""
         return {"name": self.name, "steps": [m.describe() for m in self.methods]}
