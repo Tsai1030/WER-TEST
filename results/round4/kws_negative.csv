@@ -1,0 +1,13 @@
+model,threshold,source,audio_sec,n_false
+kws-zh,0.15,cv_en,11480.5,0
+kws-zh,0.25,cv_en,11480.5,0
+kws-zh,0.35,cv_en,11480.5,0
+kws-zh-en,0.15,cv_en,11480.5,0
+kws-zh-en,0.25,cv_en,11480.5,0
+kws-zh-en,0.35,cv_en,11480.5,0
+kws-zh,0.15,noise,1201.2,0
+kws-zh,0.25,noise,1201.2,0
+kws-zh,0.35,noise,1201.2,0
+kws-zh-en,0.15,noise,1201.2,0
+kws-zh-en,0.25,noise,1201.2,0
+kws-zh-en,0.35,noise,1201.2,0

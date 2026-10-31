@@ -15,6 +15,33 @@
 
 ---
 
+## 2026-10-31：Round 4：喚醒詞（sherpa-onnx KWS）與講完判斷（plan.md v0.8 第 15 章）
+- 決定：
+  - 情境：中文喚醒詞「小咪小咪」→ 回覆「我在我在」→ 使用者說英文（可能不等回覆說完就開口）→ 講完判斷 → granite 辨識；
+    喚醒後可連續多句，沒說話逾時才回到等待喚醒。
+  - 喚醒詞引擎用 sherpa-onnx KWS（Apache 2.0）：以拼音設定喚醒詞，不需訓練或聲音向量；
+    比較兩個模型：中文 `wenetspeech-3.3M`（2024-01）與中英混合 `zh-en-3M`（2025-12），門檻掃描 0.15 / 0.25 / 0.35。
+  - 講完判斷用 Silero 串流 VAD 的狀態機（新模組 library/endpoint/），掃描 threshold 0.3 / 0.5 × 靜音 300–1500 ms。
+  - 偵測到喚醒詞就開始收音（回覆播放期間繼續收音，可搶話）；收音從喚醒判定前 lookback_ms 開始。
+  - 自動測試（不需錄音）：
+    A 誤喚醒：Common Voice 英文 3 小時首尾相接成一條串流 + DEMAND 噪音 20 分鐘，算每小時誤喚醒次數；
+    B 講完判斷：調參集 50 句組成 1,500 個「喚醒後說話」情境（開口延遲 0 / 0.5 s、單句或句中停頓 0.3–1.2 s、背景 SNR 30 / 10 / 0 dB）。
+  - 需錄音的部分：07_record_wake.py 引導錄「小咪小咪」35 次（正常、快、慢、小聲、遠、接英文）、音近詞 15 次、回覆聲 1 次；
+    09_live_demo.py 即時實測，可只測喚醒（--kws-only）。
+  - 講完判斷的推薦規則（執行前訂定）：單句或停頓 ≤ 0.6 s、背景 SNR 30 / 10 dB 的情境中，截斷率與失控率都 ≤ 5% 的參數裡，取等待時間中位數最小者。
+- 理由：
+  - 部署情境需要喚醒詞，且喚醒後的收音長度由講完判斷決定；截斷會直接造成辨識刪除錯誤，等待時間決定回應速度。
+  - Round 1–3 顯示 VAD 不宜切除句中片段，Round 4 的 VAD 只用來判斷開始與結束。
+  - 誤喚醒的主要來源是喚醒後的英文對話與環境聲，Common Voice 英文與 DEMAND 可直接當負樣本。
+- 替代方案：openWakeWord（以英文為主，中文喚醒詞需自行訓練）、Porcupine（商業授權）。
+- 限制：
+  - 沒有中文負樣本（台灣中文對話是實際環境的主要誤喚醒來源），只能以自錄的音近詞與中文對話少量測試。
+  - 正樣本只有使用者一人、筆電或耳機麥克風，正確喚醒率不能代表其他人與機器人麥克風。
+  - 外放喇叭時回覆聲會被收音，實機需要回音消除（AEC）；手動實測建議戴耳機，或加 --no-listen-during-reply。
+- 影響範圍：新增 library/kws/、library/endpoint/、library/runner/wake.py、library/runner/live.py、
+  scripts/07–09、configs/round4.yaml；pyproject 新增選用群組 wake（sherpa-onnx、sounddevice）；
+  模型放 .kws_models/（不進版控）；自錄音檔放 data/wake/（不進版控、不可公開）。
+
 ## 2026-10-31：新增解碼方法 beam / greedy 與設定檔 exclude（plan.md v0.7）
 - 決定：
   - 方法命名新增 `beam`、`greedy`（plan.md 6.5、CLAUDE.md、dashboard/data_contract.md）。解碼方法不改變音訊，

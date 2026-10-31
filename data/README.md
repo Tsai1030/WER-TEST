@@ -8,6 +8,7 @@
 | raw/female/、raw/male/ | 只解出的 test split：test.tsv、clip_list.txt、clips/ |
 | noise/source/ | 噪音源：DEMAND 16kHz（CC BY 4.0，doi:10.5281/zenodo.1227121）DKITCHEN、DLIVING、DWASHING、OOFFICE 各取 ch01，各 300 秒 |
 | clean/ | 50 句 16kHz mono WAV + manifest.csv（含 noise01–noise10 列，指向 degraded/noise_only/） |
+| wake/ | Round 4 自錄音檔（07_record_wake.py）：positive/（小咪小咪）、hard_negative/（音近詞）、reply/reply.wav（我在我在）、recordings.csv；live/（09_live_demo.py 的對話音檔與 live_log.jsonl）。含使用者本人聲音，不可上傳或公開 |
 | degraded/ | degraded/<condition>/<utt_id>.wav；degraded/noise_only/noiseNN.wav；degrade_log.csv（逐檔驗證紀錄） |
 
 ## 重新產生

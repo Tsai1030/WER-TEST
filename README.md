@@ -3,7 +3,7 @@
 找出 STT 錯誤來源並驗證降低 WER 的方法，同時記錄記憶體與延遲代價。
 
 ## 快速開始
-1. 建環境：見 docs/plan.md 第 11 章（uv sync --extra audio --extra models）
+1. 建環境：見 docs/plan.md 第 11 章（uv sync --extra audio --extra models --extra wake）
 2. uv run python scripts/check_env.py
 3. uv run python scripts/01_prepare_data.py --config configs/round1.yaml
 4. uv run python scripts/02_make_degraded.py --config configs/round1.yaml

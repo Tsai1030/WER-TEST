@@ -6,6 +6,7 @@ data/*
 .venv/
 .uv_cache/
 .hf_cache/
+.kws_models/
 __pycache__/
 *.py[cod]
 .pytest_cache/

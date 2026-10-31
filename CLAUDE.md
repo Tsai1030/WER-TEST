@@ -32,7 +32,7 @@
 |---|---|---|
 | `scripts/` | 解析命令列參數、呼叫 library（不放邏輯） | `library` |
 | `library/runner/` | 組合流程 | 其他所有 library 子模組 |
-| `library/{data, degrade, methods, models, textnorm, scoring, monitor, export}` | 單一職責 | 只能依賴 `library/utils/` |
+| `library/{data, degrade, methods, models, textnorm, scoring, monitor, export, kws, endpoint}` | 單一職責 | 只能依賴 `library/utils/` |
 | `library/utils/` | 共用工具 | 無 |
 
 子模組之間**不互相 import**（例如 `scoring` 不能 import `models`），只有 `runner` 負責串接。

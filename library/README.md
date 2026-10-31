@@ -11,7 +11,9 @@
 | textnorm/ | 文字正規化 | normalize |
 | scoring/ | 對齊、WER、統計 | align, corpus_wer, paired_bootstrap |
 | monitor/ | 記憶體、延遲量測 | ResourceMonitor, Timer |
-| runner/ | 實驗矩陣執行 | run_experiment |
+| kws/ | 喚醒詞偵測（sherpa-onnx） | KeywordSpotter |
+| endpoint/ | 講完判斷（串流 VAD） | Endpointer, decide |
+| runner/ | 實驗矩陣執行；Round 4 喚醒測試與即時實測 | run_experiment, run_kws_negative, LiveDemo |
 | export/ | 輸出結果檔 | ResultWriter, validate_results |
 | utils/ | 路徑、log、seed | — |
 

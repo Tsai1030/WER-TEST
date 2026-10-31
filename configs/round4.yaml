@@ -1,0 +1,93 @@
+# Round 4：喚醒詞（小咪小咪）與講完判斷（plan.md 第 15 章）
+# 自動測試：08_wake_eval.py；錄音：07_record_wake.py；手動實測：09_live_demo.py
+name: round4
+seed: 42
+
+paths:
+  output_dir: results/round4
+  wake_dir: data/wake          # 自錄音檔：positive/、hard_negative/、reply/、live/（只放本機，不可公開）
+
+kws:
+  keywords:
+    - { tokens: "x iǎo m ī x iǎo m ī", label: 小咪小咪 }
+  keywords_score: 1.0
+  num_trailing_blanks: 1
+  num_threads: 1
+  chunk_ms: 100
+  thresholds: [0.15, 0.25, 0.35]   # 掃描用；0.25 為 sherpa-onnx 預設
+  models:                          # 下載方式見 library/kws/README.md
+    kws-zh:                        # 中文（WenetSpeech 1 萬小時），2024-01
+      model_dir: .kws_models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01
+      encoder: encoder-epoch-12-avg-2-chunk-16-left-64.onnx
+      decoder: decoder-epoch-12-avg-2-chunk-16-left-64.onnx
+      joiner: joiner-epoch-12-avg-2-chunk-16-left-64.onnx
+    kws-zh-en:                     # 中英混合，2025-12
+      model_dir: .kws_models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+      encoder: encoder-epoch-13-avg-2-chunk-16-left-64.onnx
+      decoder: decoder-epoch-13-avg-2-chunk-16-left-64.onnx
+      joiner: joiner-epoch-13-avg-2-chunk-16-left-64.onnx
+
+# A：誤喚醒（負樣本：喚醒後的英文對話、環境噪音）
+negatives:
+  raw:
+    female: data/raw/female
+    male: data/raw/male
+  tsv_name: test.tsv
+  exclude_manifests: []          # 不排除：喚醒詞與 ASR 測試集互不相干（排除兩集的說話者後只剩 1.8 小時）
+  hours: 3.0                     # Common Voice 英文，依 seed 抽句後首尾相接成一條連續串流
+  gap_sec: 0.3                   # 句與句之間補的靜音
+  noise_source: data/noise/source  # DEMAND 噪音源全段（不含語音）
+  noise_files: [DKITCHEN, DLIVING, DWASHING, OOFFICE]
+
+# B：講完判斷模擬（喚醒後說一句英文）
+endpoint:
+  default: { threshold: 0.5, min_silence_ms: 800, no_speech_timeout_s: 5.0, max_utterance_s: 15.0 }
+  sweep:                         # 與 default 合併後展開成所有組合
+    threshold: [0.3, 0.5]
+    min_silence_ms: [300, 500, 700, 1000, 1500]
+
+endpoint_sim:
+  manifest: data/tune/manifest.csv   # 調參集 50 句（與測試集說話者不重疊）
+  trim_pad_ms: 50                # 每句先切到語音範圍（Silero 離線判斷）再加前後 pad
+  lead_sec: [0.0, 0.5]           # 開始收音到開口的時間；0 = 搶話（不等回覆說完）
+  pauses_sec: [null, 0.3, 0.6, 0.9, 1.2]   # null = 單句；其他 = 兩句以此停頓相接（模擬句中停頓）
+  tail_sec: 4.0                  # 說完後的背景音長度
+  backgrounds: { snr30: 30, snr10: 10, snr00: 0 }   # 背景噪音（SNR 以語音段計算）
+  noise_source: data/noise/source
+  noise_files: [DKITCHEN, DLIVING, DWASHING, OOFFICE]
+  noise_holdout_sec: 60.0        # 只用疊加用區段（與 conditions.yaml 相同的切法）
+
+# C：正確喚醒率（需先以 07_record_wake.py 錄音；沒有錄音時略過）
+positive:
+  snrs: [null, 10, 0]            # null = 原錄音；其他 = 疊加 DEMAND 噪音
+
+# 手動實測（09_live_demo.py）
+live:
+  kws_model: kws-zh-en
+  threshold: 0.25
+  asr_model: granite-470m        # 喚醒後的英文辨識
+  device: cpu
+  num_threads: 4
+  reply_wav: data/wake/reply/reply.wav   # 「我在我在」；不存在時播提示音
+  listen_during_reply: true      # true：回覆播放時就開始收音（可搶話；外放喇叭會收到回覆聲，建議戴耳機）
+  lookback_ms: 200               # 收音從喚醒判定前多少毫秒開始（喚醒詞後直接接著說時，避免切掉開頭）
+  multi_turn: true               # true：說完一句後繼續聽下一句，直到 no_speech_timeout 才回到等待喚醒
+  input_device: null             # null = 系統預設麥克風；可填 sounddevice 的裝置編號
+  save: true                     # 每次對話存音檔與結果到 data/wake/live/
+
+# 錄音（07_record_wake.py）：每個 prompt 錄 n 次，每次 sec 秒（prompt 可另設 sec）
+record:
+  sec: 3.0
+  prompts:
+    - { kind: positive, style: normal, n: 10, text: 小咪小咪, hint: 正常音量、正常速度，距離麥克風約 50 公分 }
+    - { kind: positive, style: fast, n: 5, text: 小咪小咪, hint: 說快一點 }
+    - { kind: positive, style: slow, n: 5, text: 小咪小咪, hint: 說慢一點 }
+    - { kind: positive, style: soft, n: 5, text: 小咪小咪, hint: 小聲一點 }
+    - { kind: positive, style: far, n: 5, text: 小咪小咪, hint: 離麥克風 1.5～2 公尺 }
+    - { kind: positive, style: then_cmd, n: 5, sec: 4.5, text: 小咪小咪 what time is it, hint: 喚醒詞後不停頓，直接接一句英文 }
+    - { kind: hard_negative, style: xiaomi, n: 3, text: 小米小米, hint: 音近詞 }
+    - { kind: hard_negative, style: ximi, n: 3, text: 小咪, hint: 只說一次 }
+    - { kind: hard_negative, style: mimi, n: 3, text: 咪咪咪咪, hint: 音近詞 }
+    - { kind: hard_negative, style: xiaoming, n: 3, text: 小明小明, hint: 音近詞 }
+    - { kind: hard_negative, style: chat, n: 3, sec: 6.0, text: （自由說一段中文，不要說到小咪）, hint: 一般中文對話 }
+    - { kind: reply, style: reply, n: 1, text: 我在我在, hint: 機器人的回覆聲（手動實測時播放） }

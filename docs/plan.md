@@ -2,7 +2,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | v0.7（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params；Round 2 後：VAD 開關用法 mode: gate、解碼方法 beam / greedy、設定檔 exclude） |
+| 版本 | v0.8（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params；Round 2 後：VAD 開關用法 mode: gate、解碼方法 beam / greedy、設定檔 exclude；Round 3 後：v0.8 新增 Round 4 喚醒詞與講完判斷，見第 15 章） |
 | 日期 | 2026-10-30 |
 | 負責人 | Tsai |
 | 目標平台 | 開發：Windows 原生、**CPU only**（Intel i3-10110U、RAM 15.8GB、無獨立顯卡）；部署驗證：Jetson Orin Nano 8GB |
@@ -27,8 +27,9 @@
 12. [里程碑與驗收標準](#12-里程碑與驗收標準)
 13. [風險與對策](#13-風險與對策)
 14. [程式撰寫規範](#14-程式撰寫規範)
-15. [附錄 A：各資料夾 README 內容](#附錄-a各資料夾-readme-內容)
-16. [附錄 B：呼叫範例](#附錄-b呼叫範例)
+15. [Round 4：喚醒詞與講完判斷](#15-round-4喚醒詞與講完判斷)
+16. [附錄 A：各資料夾 README 內容](#附錄-a各資料夾-readme-內容)
+17. [附錄 B：呼叫範例](#附錄-b呼叫範例)
 
 ---
 
@@ -321,7 +322,7 @@ D:\stt test\                    專案根目錄
 |---|---|---|
 | `scripts/` | 解析命令列參數、呼叫 library | `library` |
 | `library/runner/` | 組合流程 | 其他所有 library 子模組 |
-| `library/{data, degrade, methods, models, textnorm, scoring, monitor, export}` | 單一職責 | 只能依賴 `library/utils/` |
+| `library/{data, degrade, methods, models, textnorm, scoring, monitor, export, kws, endpoint}` | 單一職責 | 只能依賴 `library/utils/` |
 | `library/utils/` | 共用工具 | 無 |
 
 **規則**：子模組之間不互相 import（例如 `scoring` 不能 import `models`），只有 `runner` 負責串接。這樣每個子模組都能被單獨拿去用。
@@ -961,7 +962,7 @@ explicit = true
 ```
 
 ```powershell
-uv sync --extra audio --extra models    # 安裝選用群組
+uv sync --extra audio --extra models --extra wake   # 安裝選用群組（wake：Round 4）
 uv add <套件>                           # 新增套件（自動寫入 pyproject.toml 與 uv.lock）
 ```
 
@@ -975,6 +976,7 @@ uv add <套件>                           # 新增套件（自動寫入 pyprojec
 | 主要（dependencies） | numpy、pandas、soundfile、librosa、pyyaml、jiwer、psutil、tqdm、torch（CPU 版）、torchaudio、transformers（≥ 5.16，Granite 與 Qwen3-ASR 原生支援）、whisper-normalizer（或 openai-whisper 內建 normalizer） |
 | audio | pyroomacoustics、pyloudnorm、silero-vad、noisereduce（實際使用）；deepfilternet 已安裝但 import 失敗，不使用 |
 | models | faster-whisper（int8 備案；M0 實測此 CPU 上不會加速） |
+| wake | sherpa-onnx（喚醒詞）、sounddevice（麥克風；Round 4，v0.8） |
 | dev | pytest、ruff、mypy |
 | 暫不安裝 | nemo_toolkit（Parakeet）、vLLM（不支援 Windows）、KenLM、pynvml（無 NVIDIA 顯卡） |
 
@@ -1185,6 +1187,54 @@ Parakeet 暫緩（只建空殼）。
 - 以 ruff 格式化與檢查
 - Commit 訊息格式：`[模組] 動作：說明`，例如 `[scoring] add：配對 bootstrap`
 
+## 15. Round 4：喚醒詞與講完判斷
+
+> v0.8 新增。決策與理由見 docs/decisions.md「Round 4：喚醒詞（sherpa-onnx KWS）與講完判斷」。
+
+### 15.1 情境
+
+中文喚醒詞「小咪小咪」→ 機器人回覆「我在我在」→ 使用者說英文（可能不等回覆說完就開口）→ 講完判斷 → granite-470m 辨識。
+喚醒後可連續說多句，no_speech_timeout_s 內沒說話才回到等待喚醒。偵測到喚醒詞就開始收音，收音從喚醒判定前 lookback_ms 開始。
+
+### 15.2 模組
+
+| 位置 | 職責 |
+|---|---|
+| library/kws/ | sherpa-onnx KeywordSpotter 包裝（整段 spot()、即時 stream()） |
+| library/endpoint/ | 講完判斷：逐幀機率狀態機 EndpointState、Silero 逐幀機率 Endpointer |
+| library/runner/wake.py | 自動測試 A / B / C 與彙總 |
+| library/runner/live.py | 錄音工具與即時實測 |
+| scripts/07_record_wake.py、08_wake_eval.py、09_live_demo.py | 錄音、自動測試、手動實測 |
+| configs/round4.yaml | 全部參數 |
+
+喚醒詞模型放 `.kws_models/`（不進版控，下載方式見 library/kws/README.md）；自錄音檔放 `data/wake/`（不進版控、不可公開）。
+
+### 15.3 測試設計
+
+| 測試 | 資料 | 變因 | 指標 |
+|---|---|---|---|
+| A 誤喚醒 | Common Voice 英文 test 3 小時（依 seed 抽句，首尾相接成一條串流）；DEMAND 4 種噪音全段 20 分鐘 | 喚醒詞模型（kws-zh、kws-zh-en）× 門檻（0.15、0.25、0.35） | 每小時誤喚醒次數（FA/h） |
+| B 講完判斷 | 調參集 50 句（與測試集說話者不重疊），每句切到語音範圍 | 開口延遲 0 / 0.5 s × 單句或句中停頓 0.3–1.2 s × 背景 SNR 30 / 10 / 0 dB（共 1,500 情境）× threshold 0.3 / 0.5 × 靜音 300–1500 ms | 截斷率（語音結束前判定講完）、失控率（max_length / eof）、漏收率（no_speech）、等待時間（講完到判定）中位數與 p90 |
+| C 正確喚醒 | 自錄「小咪小咪」35 個（正常、快、慢、小聲、遠、接英文）；音近詞 15 個（小米小米、小咪、咪咪咪咪、小明小明、中文對話） | 同 A；正樣本另疊 DEMAND SNR 10 / 0 dB | 正確喚醒率、音近詞誤喚醒數 |
+| 手動實測 | 麥克風即時 | 命令列覆寫門檻、靜音長度、是否回覆期間收音 | 每句的講完等待、辨識時間、文字；紀錄存 data/wake/live/ |
+
+### 15.4 選擇規則（執行前訂定）
+
+- 講完判斷：單句或停頓 ≤ 0.6 s、背景 SNR 30 / 10 dB 的情境中，截斷率與失控率都 ≤ 5% 的參數裡，取等待時間中位數最小者。
+- 喚醒詞：有正樣本後，在英文負樣本 FA/h 最低的門檻中取正確喚醒率最高者；只有負樣本時只報告 FA/h，不做選擇。
+- 3 小時負樣本可分辨的最小誤喚醒率約 0.3 次 / 小時（1 次）；0 次不代表沒有誤喚醒（95% 上界約 1 次 / 小時）。
+
+### 15.5 輸出
+
+results/round4/：kws_negative.csv、kws_negative_hits.csv、endpoint.csv、kws_positive.csv（欄位見 results/README.md）。
+格式與第 6 章不同，不交給結果網頁。
+
+### 15.6 限制
+
+- 沒有中文負樣本（台灣中文對話是實際環境的主要誤喚醒來源），只能以自錄的音近詞與中文對話少量測試。
+- 正樣本只有使用者本人、筆電或耳機麥克風；不代表其他人與機器人麥克風。
+- 外放喇叭時回覆聲會被收音，實機需要回音消除（AEC）；手動實測建議戴耳機。
+
 ---
 
 ## 附錄 A：各資料夾 README 內容
@@ -1201,7 +1251,7 @@ Parakeet 暫緩（只建空殼）。
 找出 STT 錯誤來源並驗證降低 WER 的方法，同時記錄記憶體與延遲代價。
 
 ## 快速開始
-1. 建環境：見 docs/plan.md 第 11 章（uv sync --extra audio --extra models）
+1. 建環境：見 docs/plan.md 第 11 章（uv sync --extra audio --extra models --extra wake）
 2. uv run python scripts/check_env.py
 3. uv run python scripts/01_prepare_data.py --config configs/round1.yaml
 4. uv run python scripts/02_make_degraded.py --config configs/round1.yaml
