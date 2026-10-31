@@ -15,6 +15,59 @@
 
 ---
 
+## 2026-10-31：Round 3（VAD 開關用法驗證、解碼方法 beam / greedy）
+- 設定：configs/round3.yaml（git commit：baseline、vad 為 e117214；beam、greedy 與 granite × vad 重跑為 db71bf0，meta.json 記錄後者）
+- 範圍：granite-470m、whisper-small、qwen3-asr-0.6b × clean、snr00、snrm05、snrm10、lowvol、noise_only × 50 句（noise_only 10 段），共 2,080 列
+  - A：baseline、vad（`mode: gate`、Silero threshold 0.3；threshold 依 VAD 參數掃描的調參資料選定）
+  - B：解碼方法 beam（qwen：greedy → beam 5）、greedy（whisper：beam 5 → greedy）；
+    排除 granite × beam / greedy（CTC 無解碼參數）、whisper × beam、qwen × greedy（與 baseline 相同）
+- 執行：開發機 CPU fp32，2026-10-31 13:24 → 15:52（A）、16:56 → 18:22（B）；04_validate_results 通過；data/raw 不變
+  - granite × vad 第一次執行時同機跑 pytest，延遲受干擾；已移除該 260 列並於 16:07 單獨重跑（WER 與轉寫和第一次完全相同）
+- 摘要：`uv run python scripts/05_quick_report.py results/round3`
+
+### 觀察
+
+**A：VAD 開關用法（gate）**
+
+| 模型 | WER baseline → vad（全部語音條件） | snrm10 | 幻覺率（noise_only） | VAD 每句成本（中位數） |
+|---|---|---|---|---|
+| granite-470m | 3.53% → 3.53% | 6.26% → 6.26% | 10% → 10% | 77 ms |
+| qwen3-asr-0.6b | 4.67% → 4.67% | 7.78% → 7.78% | 100% → 10% | 129 ms |
+| whisper-small | 6.68% → 6.68% | 12.33% → 12.33% | 100% → 10% | 134 ms |
+
+- 三個模型所有語音條件的轉寫都與 baseline 相同：threshold 0.3 沒有擋掉任何一句語音（推算時 snrm10 有 1 句會被擋，實際沒有）。
+- 剩下的 10% 幻覺仍是 noise10（類似音樂的片段）。
+- 與 Round 2 的切除用法（trim、threshold 0.5）相比：Round 2 整體 WER 變差 0.45～0.80 個百分點，gate 無損失。
+- 延遲：granite × vad 重跑後，語音句的模型延遲中位數仍比 baseline 高 17%（1,439 → 1,691 ms），
+  但送入模型的音檔與 baseline 相同；whisper +2.7%、qwen −1.4%。原因未確認（可能與 CPU 頻率或同程序載入 Silero 有關）。
+  05_quick_report 的平均延遲包含 noise_only（gate 擋下時不呼叫模型），兩者相近，不能用來判斷。
+
+**B：解碼方法**
+
+| 模型 × 方法 | WER（全部語音條件） | ΔWER（95% CI） | 變好 / 變差 / 不變 | snrm10 | 延遲（平均） | RTF | 峰值 RAM |
+|---|---|---|---|---|---|---|---|
+| qwen baseline（greedy） | 4.67% | — | — | 7.78% | 5.1 s | 1.01 | 3,773 MB |
+| qwen + beam（beam 5） | 4.36% | −0.30（−0.61, −0.08）**顯著改善** | 6 / 0 / 244 | 6.83% | 14.8 s | 2.91 | 4,218 MB |
+| whisper baseline（beam 5） | 6.68% | — | — | 12.33% | 10.1 s | 2.00 | 3,849 MB |
+| whisper + greedy | 7.10% | +0.42（−0.19, +1.05）無顯著差異 | 9 / 13 / 228 | 13.09% | 5.2 s | 1.03 | 1,518 MB |
+
+- qwen beam 5：沒有任何一句變差，改善集中在 snrm10（−0.95）；但延遲為 2.9 倍，RAM 多約 450 MB。
+- whisper greedy：延遲減半；WER 增加主要在 snr00（+1.52），不顯著。noise_only 幻覺率 100% → 90%。
+- 解碼方法不影響幻覺：qwen + beam 仍為 100%，需搭配 VAD（本輪未測 vad+beam 組合）。
+
+### 結論
+- **VAD 應以開關用法部署**：WER 零損失，qwen / whisper 的純噪音幻覺 100% → 10%。這是目前唯一可直接採用的改善。
+- **解碼參數是「準確率換速度」**：qwen beam 5 是三輪中唯一顯著降低 WER 的方法（相對 −6.5%），但延遲 2.9 倍，
+  不適合即時對話；whisper 改 greedy 延遲減半、WER 損失不顯著，部署時 greedy 較合適。
+- 三輪合計：訊號層前處理（降噪、loudnorm）與解碼參數對這三個模型的 WER 改善都很小；
+  granite（3.53%、RTF 0.35）仍比 qwen + beam 更準且快約 8 倍，選模型的影響大於調方法。
+- 單一條件 50 句（約 500 詞，1 個錯誤 ≈ 0.2 個百分點），偵測不到 10% 左右的相對改善。
+
+### 下一步（待討論，尚未決定）
+- Round 4：喚醒詞（sherpa-onnx KWS，「小咪小咪」）與講完判斷（VAD endpointing）；
+  先做不需錄音的部分（以 Common Voice 當負樣本測誤喚醒、模擬斷句截斷率與延遲），正樣本需實機錄音。
+- 文字層方法（qwen 上下文提示 / 熱詞）需領域詞彙清單，現有 Common Voice 句子沒有專有名詞可測。
+
 ## 2026-10-31：VAD 參數掃描（原 Round 3，已停止）
 - 設定：configs/vad_tune.yaml、configs/conditions_tune.yaml
 - 範圍：granite-470m × 12 組 VAD 設定（不用 VAD、Silero 7 組、WebRTC 4 組）
