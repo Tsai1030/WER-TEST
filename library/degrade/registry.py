@@ -169,9 +169,11 @@ def build_noise_only_clips(cfg: dict, seed: int) -> list[tuple[str, np.ndarray, 
     """由各噪音源的保留區段切出純噪音片段，並調整到 rms_dbfs。
 
     n_clips 段依噪音環境輪流分配（例：10 段 / 4 個環境 → 3、3、2、2）。
+    noise_only 的 segment 設為 "mix" 時改從疊加用區段切（調參用資料集，避免用到測試用的保留區段）。
 
     參數:
-        cfg: configs/conditions.yaml 讀入後的 dict（conditions.noise_only 需有 n_clips、clip_sec、rms_dbfs）。
+        cfg: configs/conditions.yaml 讀入後的 dict（conditions.noise_only 需有 n_clips、clip_sec、rms_dbfs；
+            segment 可選 "holdout"（預設）或 "mix"）。
         seed: 亂數種子。
 
     回傳:
@@ -185,10 +187,14 @@ def build_noise_only_clips(cfg: dict, seed: int) -> list[tuple[str, np.ndarray, 
     bank = noise_bank(cfg)
     n_clips, clip_sec = int(spec["n_clips"]), float(spec["clip_sec"])
     target_rms = 10 ** (float(spec["rms_dbfs"]) / 20)
+    segment = spec.get("segment", "holdout")
+    if segment not in ("holdout", "mix"):
+        raise ValueError(f"noise_only 的 segment 只能是 holdout 或 mix：{segment}")
     per_env: list[list[tuple[str, np.ndarray, int]]] = []
-    for env_idx, (name, _, holdout, sr) in enumerate(bank):
+    for env_idx, (name, mix_part, holdout, sr) in enumerate(bank):
+        source = holdout if segment == "holdout" else mix_part
         k = len(range(env_idx, n_clips, len(bank)))
-        clips = make_noise_only(holdout, sr, k, clip_sec, seed + env_idx) if k else []
+        clips = make_noise_only(source, sr, k, clip_sec, seed + env_idx) if k else []
         per_env.append([(name, prevent_clipping(_set_rms(c, target_rms)), sr) for c in clips])
     # 環境輪流排列，讓 noise01、noise02… 交錯來自不同環境
     return [env[r] for r in range(max(map(len, per_env))) for env in per_env if r < len(env)]

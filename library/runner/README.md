@@ -10,6 +10,7 @@
 | runner.py | run_experiment()：主流程，逐列寫入結果 |
 | bench.py | bench_model()：M0 速度實測（暖機 1 句 + 計時 N 句），供 check_env.py 使用 |
 | degrade_set.py | make_degraded_set()：M2 產生所有劣化音檔與純噪音片段，逐檔驗證並寫 degrade_log.csv |
+| vad_sweep.py | run_vad_sweep()：單一模型 × 多組 VAD 設定逐句辨識，寫 sweep.csv（可續跑）；summarize_sweep()：各設定 WER、刪除數、男女聲、噪音誤放行與選擇規則 |
 | report.py | 05_quick_report.py 的計算：整體 WER、ΔWER 與 CI、幻覺率、正規化影響、男女聲、資源、一句話結論（定義同 dashboard/sections.md） |
 
 ## 流程

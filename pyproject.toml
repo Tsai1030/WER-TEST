@@ -19,7 +19,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-audio  = ["pyroomacoustics", "pyloudnorm", "silero-vad", "deepfilternet", "noisereduce"]
+audio  = [
+    "pyroomacoustics",
+    "pyloudnorm",
+    "silero-vad",
+    "deepfilternet",
+    "noisereduce",
+    "webrtcvad-wheels>=2.0.14.post1",
+]
 models = [
  "faster-whisper",
 ]

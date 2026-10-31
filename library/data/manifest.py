@@ -121,6 +121,12 @@ def _read_manifest(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, encoding="utf-8", dtype=str, keep_default_na=False)
 
 
+def manifest_source_files(path: str | Path) -> set[str]:
+    """回傳 manifest 中語音列的原始檔名（source_file 欄，不含 noise 列），供建立調參集時排除。"""
+    df = _read_manifest(resolve_path(path))
+    return set(df.loc[df["utt_id"].str.startswith("utt"), "source_file"])
+
+
 def load_manifest(path: str | Path) -> list[Utterance]:
     """讀取 manifest.csv（utf-8）。
 

@@ -1,0 +1,9 @@
+# Round 3 VAD 調參集專用：噪音源與測試集相同，但 noise_only 改從疊加用區段切（測試集用保留區段）
+noise_source: data/noise/source
+noise_files: [DKITCHEN, DLIVING, DWASHING, OOFFICE]
+noise_holdout_sec: 60.0
+conditions:
+  clean:   {}
+  snrm05:  { type: noise, snr_db: -5 }
+  snrm10:  { type: noise, snr_db: -10 }
+  noise_only: { type: noise_only, n_clips: 20, clip_sec: 5.0, rms_dbfs: -32.0, segment: mix }

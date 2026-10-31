@@ -6,6 +6,7 @@ import pytest
 from library.data import load_manifest, read_audio
 from library.export import METHOD_NAMES
 from library.methods import MethodChain, get_method, list_methods
+from library.methods.vad import frames_to_segments
 from library.utils import resolve_path
 
 SR = 16000
@@ -94,6 +95,22 @@ def test_vad_returns_empty_for_non_speech() -> None:
     assert len(vad.process(np.zeros(SR * 2, dtype=np.float32), SR)) == 0
     assert len(vad.process(_white(2.0, 0.01), SR)) == 0
     assert len(vad.process(np.zeros(0, np.float32), SR)) == 0
+
+
+def test_frames_to_segments_merge_drop_pad() -> None:
+    # 幀長 160（10 ms）：幀 0–4 語音、5 靜音（10 ms < min_silence 合併）、6–9 語音、20 單幀語音（短於 min_speech 捨棄）
+    flags = [True] * 5 + [False] + [True] * 4 + [False] * 10 + [True] + [False] * 9
+    segs = frames_to_segments(flags, 160, 30 * 160, SR, min_speech_ms=50, min_silence_ms=30, pad_ms=20)
+    assert segs == [(0, 10 * 160 + 320)]
+
+
+def test_webrtc_vad_and_bad_impl() -> None:
+    vad = get_method("vad", {"vad": {"impl": "webrtc", "aggressiveness": 3}})
+    vad.load("cpu")
+    assert len(vad.process(np.zeros(SR * 2, dtype=np.float32), SR)) == 0
+    assert vad.describe()["impl"] == "webrtc"
+    with pytest.raises(ValueError, match="impl"):
+        get_method("vad", {"vad": {"impl": "magic"}})
 
 
 def test_chain_stops_on_empty() -> None:

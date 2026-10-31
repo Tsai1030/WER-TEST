@@ -6,10 +6,11 @@ from library.data.manifest import (
     MANIFEST_COLUMNS,
     build_manifest,
     load_manifest,
+    manifest_source_files,
     validate_manifest,
     write_noise_entries,
 )
-from library.data.sampler import sample_utterances
+from library.data.sampler import sample_utterances, speakers_of
 from library.data.types import Utterance
 
 __all__ = [
@@ -20,8 +21,10 @@ __all__ = [
     "get_duration",
     "load_commonvoice_tsv",
     "load_manifest",
+    "manifest_source_files",
     "read_audio",
     "sample_utterances",
+    "speakers_of",
     "validate_manifest",
     "write_audio",
     "write_noise_entries",

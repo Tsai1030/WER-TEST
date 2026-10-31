@@ -11,7 +11,9 @@ import pandas as pd
 from library.data import (
     build_manifest,
     load_commonvoice_tsv,
+    manifest_source_files,
     sample_utterances,
+    speakers_of,
     validate_manifest,
 )
 from library.utils import get_logger, load_yaml, resolve_path, set_seed, setup_logging
@@ -42,8 +44,14 @@ def main(argv: list[str] | None = None) -> int:
         log.info("%s：讀入 %d 句、%d 位說話者", gender, len(df), df["client_id"].nunique())
         frames.append(df)
 
+    pool = pd.concat(frames, ignore_index=True)
+    exclude: set[str] = set()
+    if sampling.get("exclude_manifest"):  # 調參集：排除測試集的說話者
+        exclude = speakers_of(pool, manifest_source_files(sampling["exclude_manifest"]))
+        log.info("排除 %s 中的 %d 位說話者", sampling["exclude_manifest"], len(exclude))
+
     samples = sample_utterances(
-        pd.concat(frames, ignore_index=True),
+        pool,
         n_per_gender=sampling["n_per_gender"],
         min_sec=sampling["min_sec"],
         max_sec=sampling["max_sec"],
@@ -51,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         max_down_votes=sampling["max_down_votes"],
         one_per_speaker=sampling["one_per_speaker"],
         seed=seed,
+        exclude_speakers=exclude,
     )
 
     manifest_path = resolve_path(cfg["paths"]["manifest"])

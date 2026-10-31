@@ -19,6 +19,7 @@ from library.data import (
     load_manifest,
     read_audio,
     sample_utterances,
+    speakers_of,
     validate_manifest,
     write_noise_entries,
 )
@@ -106,6 +107,15 @@ def test_sample_is_deterministic(corpus: pd.DataFrame) -> None:
     a = sample_utterances(corpus, n_per_gender=5, seed=7)
     b = sample_utterances(corpus.sample(frac=1, random_state=1), n_per_gender=5, seed=7)
     assert list(a["path"]) == list(b["path"])
+
+
+def test_sample_excludes_speakers(corpus: pd.DataFrame) -> None:
+    """調參集：排除測試集說話者（以原始檔名反查 client_id）。"""
+    test = sample_utterances(corpus, n_per_gender=2, seed=42)
+    excluded = speakers_of(corpus, set(test["source_file"]))
+    assert excluded == set(test["client_id"])
+    tune = sample_utterances(corpus, n_per_gender=2, seed=42, exclude_speakers=excluded)
+    assert not tune["client_id"].isin(excluded).any()
 
 
 def test_sample_insufficient(corpus: pd.DataFrame) -> None:

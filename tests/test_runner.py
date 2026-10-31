@@ -17,7 +17,10 @@ from library.runner import (
     iter_matrix,
     load_config,
     run_experiment,
+    run_vad_sweep,
     split_utterances,
+    summarize_sweep,
+    vad_sweep,
 )
 from library.runner import runner as runner_module
 
@@ -177,6 +180,21 @@ def test_method_params_override_reaches_method_and_meta(cfg: ExperimentConfig) -
     assert validate_results(out) == []
     meta = (out / "meta.json").read_text(encoding="utf-8")
     assert '"target_lufs": -16.0' in meta
+
+
+def test_vad_sweep_rows_resume_and_summary(cfg: ExperimentConfig, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(vad_sweep, "get_model", lambda name, config=None: FakeModel(name))
+    variants = {"default": {"impl": "silero"}, "webrtc_a3": {"impl": "webrtc", "aggressiveness": 3}}
+    path = run_vad_sweep(cfg, variants, "granite-470m")
+    df = pd.read_csv(path, encoding="utf-8")
+    # no_vad：2 條件 × 2 句；每個 VAD variant 另加 1 段純噪音
+    assert df.groupby("variant").size().to_dict() == {"no_vad": 4, "default": 5, "webrtc_a3": 5}
+    calls = FakeModel.calls
+    run_vad_sweep(cfg, variants, "granite-470m")  # 已完成的 variant 不重跑
+    assert FakeModel.calls == calls and len(pd.read_csv(path, encoding="utf-8")) == 14
+    s = summarize_sweep(path, hardest="snr10")
+    assert s.loc["no_vad", "wer_clean"] == pytest.approx(25.0)
+    assert s.loc["default", "noise_pass_pct"] == 0.0 and s["recommended"].sum() == 1
 
 
 def test_load_config_round1() -> None:

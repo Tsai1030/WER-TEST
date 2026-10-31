@@ -1,0 +1,46 @@
+# Round 3：VAD 調參集（與測試集說話者不重疊），由 06_vad_sweep.py 使用
+name: vad_tune
+seed: 7              # 與測試集（seed 42）不同；另以 exclude_manifest 排除測試集說話者
+device: cpu
+dtype: fp32
+num_threads: 4
+
+paths:
+  raw:
+    female: data/raw/female
+    male: data/raw/male
+  manifest: data/tune/manifest.csv
+  degraded_dir: data/tune_degraded
+  output_dir: results/vad_tune
+
+sampling:
+  tsv_name: test.tsv
+  n_per_gender: 25
+  min_sec: 3.0
+  max_sec: 8.0
+  min_words: 5
+  max_down_votes: 0
+  one_per_speaker: true
+  exclude_manifest: data/clean/manifest.csv
+
+models: [granite-470m]
+methods: [vad]
+conditions: [clean, snrm05, snrm10, noise_only]
+conditions_file: configs/conditions_tune.yaml
+normalizer: english
+
+sweep:
+  model: granite-470m      # 最快；VAD 造成的刪除在三個模型上相近（Round 2）
+  hardest: snrm10
+  variants:                # "default" 為 configs/methods/vad.yaml 的設定，推薦規則以它為基準
+    default:      { impl: silero, threshold: 0.5, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    silero_t40:   { impl: silero, threshold: 0.4, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    silero_t30:   { impl: silero, threshold: 0.3, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    silero_t20:   { impl: silero, threshold: 0.2, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    silero_t10:   { impl: silero, threshold: 0.1, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    silero_p400:  { impl: silero, threshold: 0.5, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 400 }
+    silero_t30_p400: { impl: silero, threshold: 0.3, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 400 }
+    webrtc_a0:    { impl: webrtc, aggressiveness: 0, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    webrtc_a1:    { impl: webrtc, aggressiveness: 1, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    webrtc_a2:    { impl: webrtc, aggressiveness: 2, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }
+    webrtc_a3:    { impl: webrtc, aggressiveness: 3, min_speech_ms: 250, min_silence_ms: 300, pad_ms: 200 }

@@ -19,6 +19,7 @@ def sample_utterances(
     max_down_votes: int = 0,
     one_per_speaker: bool = True,
     seed: int = 42,
+    exclude_speakers: set[str] | None = None,
 ) -> pd.DataFrame:
     """依規則抽樣；同一 seed 必須得到相同結果。
 
@@ -38,6 +39,7 @@ def sample_utterances(
         max_down_votes: down_votes 上限。
         one_per_speaker: 每位說話者最多一句。
         seed: 亂數種子。
+        exclude_speakers: 不可抽的 client_id（例：建立調參集時排除測試集的說話者）。
 
     回傳:
         抽樣結果 DataFrame（先女後男，各自依抽中順序），新增 audio_sec 與 n_words 欄。
@@ -51,6 +53,7 @@ def sample_utterances(
         work["gender"].isin(_GENDERS)
         & (work["n_words"] >= min_words)
         & (work["down_votes"] <= max_down_votes)
+        & ~work["client_id"].isin(exclude_speakers or set())
     )
     work = work[mask].sort_values("path", kind="stable").reset_index(drop=True)
     rng = np.random.default_rng(seed)
@@ -76,3 +79,16 @@ def sample_utterances(
     if short:
         raise ValueError(f"符合條件的句子不足 {n_per_gender} 句：{short}")
     return pd.DataFrame(picked["female"] + picked["male"]).reset_index(drop=True)
+
+
+def speakers_of(df: pd.DataFrame, source_files: set[str]) -> set[str]:
+    """回傳 source_files（原始 MP3 檔名，例如 manifest 的 source_file 欄）所屬說話者的 client_id。
+
+    參數:
+        df: load_commonvoice_tsv() 的輸出（需含 source_file 與 client_id 欄）。
+        source_files: 檔名集合。
+
+    回傳:
+        client_id 集合（只在記憶體中使用，不輸出）。
+    """
+    return set(df.loc[df["source_file"].isin(source_files), "client_id"])
