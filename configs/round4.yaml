@@ -41,7 +41,7 @@ negatives:
 
 # B：講完判斷模擬（喚醒後說一句英文）
 endpoint:
-  default: { threshold: 0.5, min_silence_ms: 800, no_speech_timeout_s: 5.0, max_utterance_s: 15.0 }
+  default: { threshold: 0.5, min_silence_ms: 1000, no_speech_timeout_s: 5.0, max_utterance_s: 15.0 }   # 手動實測用；1000 為 D 的最終建議
   sweep:                         # 與 default 合併後展開成所有組合
     threshold: [0.3, 0.5]
     min_silence_ms: [300, 500, 700, 1000, 1500]
@@ -60,6 +60,26 @@ endpoint_sim:
 # C：正確喚醒率（需先以 07_record_wake.py 錄音；沒有錄音時略過）
 positive:
   snrs: [null, 10, 0]            # null = 原錄音；其他 = 疊加 DEMAND 噪音
+
+# D：整段流程（講完判斷 → 辨識）；B 在調參集選參數，這裡在測試集驗證
+pipeline:
+  manifest: data/clean/manifest.csv   # 測試集 50 句（Round 1–3 所用）
+  lead_sec: [0.5]
+  pauses_sec: [null, 0.6]
+  backgrounds: { snr30: 30, snr10: 10 }
+  variants: [oracle, t0.5_s700, t0.5_s1000]   # oracle = 在實際語音結束處切（不受截斷影響的對照）
+  asr_model: granite-470m
+  device: cpu
+  num_threads: 4
+  normalizer: english
+
+# E：待機成本（每個元件在獨立的子行程中量測）
+standby:
+  manifest: data/clean/manifest.csv   # 語音：測試集首尾相接；噪音：negatives.noise_files
+  audio_sec: 300                 # 語音、噪音各 300 秒
+  threshold: 0.25
+  asr_model: granite-470m        # 只量常駐記憶體
+  num_threads: 4
 
 # 手動實測（09_live_demo.py）
 live:

@@ -1,11 +1,11 @@
-"""library.monitor：ResourceMonitor 峰值 RAM、CPU only 時 GPU 為 None、Timer。"""
+"""library.monitor：ResourceMonitor 峰值 RAM、CPU only 時 GPU 為 None、Timer、CpuTimer。"""
 
 import time
 
 import numpy as np
 import pytest
 
-from library.monitor import ResourceMonitor, Timer
+from library.monitor import CpuTimer, ResourceMonitor, Timer, current_rss_mb
 
 
 def test_resource_monitor_captures_ram_peak() -> None:
@@ -40,3 +40,15 @@ def test_timer() -> None:
     with Timer() as t:
         time.sleep(0.05)
     assert 45 <= t.ms < 1000
+
+
+def test_cpu_timer_counts_busy_not_sleep() -> None:
+    with CpuTimer() as idle:
+        time.sleep(0.3)
+    with CpuTimer() as busy:
+        end = time.perf_counter() + 0.3
+        while time.perf_counter() < end:
+            pass
+    assert idle.wall_sec >= 0.29 and idle.cpu_sec < 0.15
+    assert busy.cpu_sec > 0.15
+    assert current_rss_mb() > 10

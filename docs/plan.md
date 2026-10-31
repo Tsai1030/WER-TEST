@@ -2,7 +2,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | v0.8（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params；Round 2 後：VAD 開關用法 mode: gate、解碼方法 beam / greedy、設定檔 exclude；Round 3 後：v0.8 新增 Round 4 喚醒詞與講完判斷，見第 15 章） |
+| 版本 | v0.9（第一輪：英文；Windows 原生、CPU only、uv 環境、Parakeet 暫緩；M0 後：Whisper 改 small、Qwen3-ASR 改 transformers 原生版、降噪改 noisereduce、Jetson 部署預計 q4；Round 1 後：新增負 SNR 條件 snrm05 / snrm10、設定檔可覆寫方法參數 method_params；Round 2 後：VAD 開關用法 mode: gate、解碼方法 beam / greedy、設定檔 exclude；Round 3 後：v0.8 新增 Round 4 喚醒詞與講完判斷，見第 15 章；v0.9 新增 Round 4 整段流程與待機成本（15.3 D、E）） |
 | 日期 | 2026-10-30 |
 | 負責人 | Tsai |
 | 目標平台 | 開發：Windows 原生、**CPU only**（Intel i3-10110U、RAM 15.8GB、無獨立顯卡）；部署驗證：Jetson Orin Nano 8GB |
@@ -1202,7 +1202,7 @@ Parakeet 暫緩（只建空殼）。
 |---|---|
 | library/kws/ | sherpa-onnx KeywordSpotter 包裝（整段 spot()、即時 stream()） |
 | library/endpoint/ | 講完判斷：逐幀機率狀態機 EndpointState、Silero 逐幀機率 Endpointer |
-| library/runner/wake.py | 自動測試 A / B / C 與彙總 |
+| library/runner/wake.py | 自動測試 A–E 與彙總 |
 | library/runner/live.py | 錄音工具與即時實測 |
 | scripts/07_record_wake.py、08_wake_eval.py、09_live_demo.py | 錄音、自動測試、手動實測 |
 | configs/round4.yaml | 全部參數 |
@@ -1216,23 +1216,29 @@ Parakeet 暫緩（只建空殼）。
 | A 誤喚醒 | Common Voice 英文 test 3 小時（依 seed 抽句，首尾相接成一條串流）；DEMAND 4 種噪音全段 20 分鐘 | 喚醒詞模型（kws-zh、kws-zh-en）× 門檻（0.15、0.25、0.35） | 每小時誤喚醒次數（FA/h） |
 | B 講完判斷 | 調參集 50 句（與測試集說話者不重疊），每句切到語音範圍 | 開口延遲 0 / 0.5 s × 單句或句中停頓 0.3–1.2 s × 背景 SNR 30 / 10 / 0 dB（共 1,500 情境）× threshold 0.3 / 0.5 × 靜音 300–1500 ms | 截斷率（語音結束前判定講完）、失控率（max_length / eof）、漏收率（no_speech）、等待時間（講完到判定）中位數與 p90 |
 | C 正確喚醒 | 自錄「小咪小咪」35 個（正常、快、慢、小聲、遠、接英文）；音近詞 15 個（小米小米、小咪、咪咪咪咪、小明小明、中文對話） | 同 A；正樣本另疊 DEMAND SNR 10 / 0 dB | 正確喚醒率、音近詞誤喚醒數 |
+| D 整段流程（v0.9） | 測試集 50 句（Round 1–3 所用），組法同 B | 開口延遲 0.5 s × 單句或停頓 0.6 s × SNR 30 / 10 dB（200 情境）× 講完判斷 oracle / t0.5_s700 / t0.5_s1000；granite-470m | WER、與 oracle 的 ΔWER（以情境配對 bootstrap）、講完到出字的時間（等待 + 辨識）中位數與 p90 |
+| E 待機成本（v0.9） | 測試集語音、DEMAND 噪音各 300 秒 | 元件：kws-zh、kws-zh-en、Silero VAD、granite-470m（各在獨立子行程中量） | 即時處理的 CPU 佔用（佔一顆邏輯核心的 %）、每塊處理時間中位數與 p99、載入後增加的記憶體 |
 | 手動實測 | 麥克風即時 | 命令列覆寫門檻、靜音長度、是否回覆期間收音 | 每句的講完等待、辨識時間、文字；紀錄存 data/wake/live/ |
 
 ### 15.4 選擇規則（執行前訂定）
 
 - 講完判斷：單句或停頓 ≤ 0.6 s、背景 SNR 30 / 10 dB 的情境中，截斷率與失控率都 ≤ 5% 的參數裡，取等待時間中位數最小者。
 - 喚醒詞：有正樣本後，在英文負樣本 FA/h 最低的門檻中取正確喚醒率最高者；只有負樣本時只報告 FA/h，不做選擇。
+- 整段流程（v0.9）：oracle 是只切掉講完後靜音的對照（不受截斷影響）。B 選出的參數（t0.5_s700）與 oracle 的 ΔWER
+  95% CI 下界 > 0（顯著變差）時，改建議 t0.5_s1000；否則維持 B 的選擇。
 - 3 小時負樣本可分辨的最小誤喚醒率約 0.3 次 / 小時（1 次）；0 次不代表沒有誤喚醒（95% 上界約 1 次 / 小時）。
 
 ### 15.5 輸出
 
-results/round4/：kws_negative.csv、kws_negative_hits.csv、endpoint.csv、kws_positive.csv（欄位見 results/README.md）。
-格式與第 6 章不同，不交給結果網頁。
+results/round4/：kws_negative.csv、kws_negative_hits.csv、endpoint.csv、kws_positive.csv、pipeline.csv、standby.csv
+（欄位見 results/README.md）。格式與第 6 章不同，不進入結果網頁的自動分組；網頁另以 Round 4 區塊顯示彙總數字（v0.9）。
 
 ### 15.6 限制
 
 - 沒有中文負樣本（台灣中文對話是實際環境的主要誤喚醒來源），只能以自錄的音近詞與中文對話少量測試。
 - 正樣本只有使用者本人、筆電或耳機麥克風；不代表其他人與機器人麥克風。
+- 整段流程用乾淨的測試集句子，沒有包含喚醒詞尾巴、回覆聲與真實的猶豫停頓；辨識時間為開發機 CPU fp32，不代表 Jetson。
+- 待機記憶體為各元件在獨立行程中載入前後的 RSS 差（含 torch、onnxruntime 等共用函式庫），合計會高估一起載入時的總量。
 - 外放喇叭時回覆聲會被收音，實機需要回音消除（AEC）；手動實測建議戴耳機。
 
 ---

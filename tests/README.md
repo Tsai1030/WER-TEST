@@ -14,9 +14,9 @@
 | test_runner.py | 設定讀取與命名驗證（round1 / round2）、矩陣展開順序、完整執行通過驗證、中斷續跑不重複、已完成模型不重載、--no-resume 備份、method_params 覆寫 |
 | test_export.py | ResultWriter 附加與空欄位、validate_results 能抓出各類規格錯誤 |
 | test_report.py | 摘要計算：整體 WER 加權、ΔWER 顯著判定、幻覺率、假錯誤、一句話結論 |
-| test_monitor.py | ResourceMonitor 峰值 RAM、CPU only 時 GPU 為 None、Timer |
+| test_monitor.py | ResourceMonitor 峰值 RAM、CPU only 時 GPU 為 None、Timer、CpuTimer |
 | test_methods.py | 方法註冊表、組合、baseline、loudnorm 達標、降噪基本行為、VAD 無語音回傳空陣列 |
 | test_kws.py | keywords 格式與 token 檢查；有下載模型時偵測模型附帶的測試音檔 |
 | test_endpoint.py | 講完判斷狀態機（假機率）：講完、句中停頓、遲滯、逾時、最長長度；串流與離線結果一致 |
-| test_wake.py | round4.yaml 讀取與錯誤、參數展開、錄音清單、講完判斷推薦規則 |
+| test_wake.py | round4.yaml 讀取與錯誤、參數展開、錄音清單、講完判斷推薦規則、整段流程彙總 |
 | test_models.py | 模型註冊表符合命名規則、parakeet 停用、未 load 時報錯、cuda 退回 cpu、矩陣規模 |

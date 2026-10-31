@@ -6,6 +6,7 @@
 |---|---|
 | memory.py | ResourceMonitor：峰值 RAM（psutil 輪詢）；偵測到 GPU 時另量 GPU |
 | timer.py | Timer：毫秒計時 |
+| cpu.py | CpuTimer：行程 CPU 秒數與經過秒數（算即時處理的 CPU 佔用）；current_rss_mb()：目前 RSS |
 
 ## 範例
     with ResourceMonitor() as mon:

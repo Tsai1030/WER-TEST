@@ -15,6 +15,17 @@
 
 ---
 
+## 2026-10-31：講完判斷改用靜音 1,000 ms；新增整段流程與待機成本測試（plan.md v0.9）
+- 決定：
+  - 新增 D 整段流程（測試集情境 → 講完判斷 → granite 辨識，與 oracle 比較 WER 與講完到出字時間）與
+    E 待機成本（各元件的即時 CPU 佔用、處理時間與記憶體）；D 的規則在執行前寫入 plan.md 15.4。
+  - 講完判斷最終採用 threshold 0.5、靜音 1,000 ms（round4.yaml endpoint.default 改為 1000，手動實測預設使用）。
+- 理由：B 依規則選出 700 ms（調參集截斷率 2.2%），但 D 在測試集上 ΔWER +1.77 個百分點（95% CI +0.19～+3.70，顯著變差）：
+  截斷雖只有 3%，每次都丟掉後半句。依 15.4 改用 1,000 ms，ΔWER −0.03（無顯著差異），多等約 0.3 秒。
+- 替代方案：1,500 ms（停頓 0.9 s 也不截斷，但每句多等 0.5 秒，D 未測）；threshold 0.3 + 700 ms（B 的截斷率較低，但 SNR 0 dB 失控率較高，D 未測）。
+- 影響範圍：configs/round4.yaml（pipeline、standby 區段，endpoint.default）、library/runner/wake.py、library/monitor/cpu.py、
+  scripts/08_wake_eval.py、results/round4/pipeline.csv、standby.csv、結果網頁 Round 4 分頁。
+
 ## 2026-10-31：Round 4：喚醒詞（sherpa-onnx KWS）與講完判斷（plan.md v0.8 第 15 章）
 - 決定：
   - 情境：中文喚醒詞「小咪小咪」→ 回覆「我在我在」→ 使用者說英文（可能不等回覆說完就開口）→ 講完判斷 → granite 辨識；

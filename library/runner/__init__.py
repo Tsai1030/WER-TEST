@@ -16,8 +16,11 @@ from library.runner.wake import (
     run_endpoint_sim,
     run_kws_negative,
     run_kws_positive,
+    run_pipeline,
+    run_standby,
     summarize_endpoint,
     summarize_kws,
+    summarize_pipeline,
 )
 
 __all__ = [
@@ -40,9 +43,12 @@ __all__ = [
     "run_experiment",
     "run_kws_negative",
     "run_kws_positive",
+    "run_pipeline",
+    "run_standby",
     "run_vad_sweep",
     "split_utterances",
     "summarize_endpoint",
     "summarize_kws",
+    "summarize_pipeline",
     "summarize_sweep",
 ]
