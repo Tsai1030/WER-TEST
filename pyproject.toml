@@ -38,13 +38,23 @@ wake = [
 [dependency-groups]
 dev = ["pytest", "ruff", "mypy"]
 
+# 開發機（Windows）用 CPU 版；Jetson（Linux aarch64，JetPack 7 / CUDA 13.2）用官方 cu132 版。
+# torchaudio 沒有 cu132 的 aarch64 版，一律用 CPU 版（本專案只用到 CPU 功能）
 [tool.uv.sources]
-torch      = { index = "pytorch-cpu" }
+torch = [
+  { index = "pytorch-cu132", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+  { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine != 'aarch64'" },
+]
 torchaudio = { index = "pytorch-cpu" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
 explicit = true
 
 # 讓 uv sync 以 editable 方式安裝 library/，scripts/ 與 tests/ 才能 import library

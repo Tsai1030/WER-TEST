@@ -1074,6 +1074,8 @@ foreach ($g in "female", "male") {
 - 比較「方法開/關的改善幅度」是否與 Windows 一致
 - Jetson 為 Linux：先跑 `pytest` 確認跨平台沒問題，再複跑實驗；屆時可一併加入 Parakeet
 - 實測記憶體（統一記憶體，需看系統總用量）
+- 2026-11-02 起：先以 `configs/jetson_round3.yaml`（GPU、fp32、全部 10 種條件）看平台差異；
+  Jetson 的 PyTorch 用官方 cu132 index（見 `pyproject.toml` 與 decisions.md）
 
 ---
 

@@ -1,0 +1,63 @@
+# Jetson Orin Nano 複驗（plan.md 11.5）：與 round3.yaml 相同的模型、方法與測試集，改用 GPU，
+# 並加回 Round 1 的條件（snr20、snr10、snr05、reverb），一次涵蓋全部 10 種條件，可逐列對照開發機結果。
+# 精度維持 fp32（與開發機相同，先看平台差異）；q4 部署版本另行測試。
+name: jetson_round3
+seed: 42
+device: cuda         # 無 CUDA 時自動退回 cpu 並記錄警告
+dtype: fp32
+num_threads: 4
+
+paths:
+  raw:                                 # 不重跑 01_prepare_data（Jetson 上只有處理後的 data/clean、data/degraded）
+    female: data/raw/female
+    male: data/raw/male
+  manifest: data/clean/manifest.csv
+  degraded_dir: data/degraded
+  output_dir: results/jetson/round3
+
+sampling:
+  tsv_name: test.tsv
+  n_per_gender: 25
+  min_sec: 3.0
+  max_sec: 8.0
+  min_words: 5
+  max_down_votes: 0
+  one_per_speaker: true
+
+models:
+  - granite-470m
+  - whisper-small
+  - qwen3-asr-0.6b
+
+methods:
+  - baseline
+  - vad
+  - beam
+  - greedy
+
+exclude:
+  - { model: granite-470m, method: beam }
+  - { model: granite-470m, method: greedy }
+  - { model: whisper-small, method: beam }      # baseline 已是 beam 5
+  - { model: qwen3-asr-0.6b, method: greedy }   # baseline 已是 greedy
+
+conditions: [clean, snr20, snr10, snr05, snr00, snrm05, snrm10, reverb, lowvol, noise_only]
+
+method_params:
+  vad:
+    impl: silero
+    mode: gate
+    threshold: 0.3
+    min_speech_ms: 250
+    min_silence_ms: 300
+    pad_ms: 200
+
+conditions_file: configs/conditions.yaml
+normalizer: english
+save_processed: false
+max_utterances: null
+
+meta:
+  dataset: Common Voice Scripted Speech 26.0 American English (Female + Male) test
+  platform: Jetson Orin Nano 8GB Super（JetPack 7 / L4T R39.2.1、CUDA 13.2、25W 模式）
+  nano_budget_mb: 8192

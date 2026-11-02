@@ -15,6 +15,18 @@
 
 ---
 
+## 2026-11-02：Jetson 改用 GPU 版 PyTorch；新增 Jetson 複驗設定
+- 決定：`pyproject.toml` 的 torch 來源依平台區分：Linux aarch64 用 PyTorch 官方 cu132 index
+  （`2.15.0+cu132`），其他平台維持 CPU index（開發機仍為 `2.15.0+cpu`，版本號相同）；torchaudio 一律 CPU 版。
+  新增 `configs/jetson_round3.yaml`：與 round3.yaml 相同的模型、方法、50 句，`device: cuda`、fp32，
+  條件加回 Round 1 的 snr20 / snr10 / snr05 / reverb（共 10 種），輸出到 `results/jetson/round3/`。
+- 理由：板子為 Jetson Orin Nano 8GB Super，JetPack 7（L4T R39.2.1）、CUDA 13.2；官方 cu132 有
+  cp311 aarch64 版，與 CUDA 版本一致，且 torch 版本可與開發機相同。使用者同意改用 GPU（原規定 PyTorch 維持 CPU index）。
+  先維持 fp32，讓 Windows 與 Jetson 的差異只來自平台；q4 部署版本另行測試（11.5）。
+- 替代方案：社群編譯的 JetPack 7.2 wheel（非官方、torch 2.12）；Jetson AI Lab 的 jp6 index（JetPack 6，不相容）。
+- 影響範圍：`pyproject.toml`、`uv.lock`（新增 nvidia-* CUDA 套件，只裝在 Linux aarch64）、`CLAUDE.md`、
+  `configs/jetson_round3.yaml`。官方 wheel 未內建 sm_87 專用核心，以 sm_80 核心執行（相容）。
+
 ## 2026-10-31：講完判斷改用靜音 1,000 ms；新增整段流程與待機成本測試（plan.md v0.9）
 - 決定：
   - 新增 D 整段流程（測試集情境 → 講完判斷 → granite 辨識，與 oracle 比較 WER 與講完到出字時間）與

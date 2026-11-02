@@ -7,7 +7,8 @@
 - Windows 原生（PowerShell）、**CPU only**（Intel i3-10110U，無 NVIDIA 顯卡）；之後部署到 Jetson Orin Nano（Linux）。
 - 專案路徑 `D:\stt test` **含空格**：命令列中的路徑一律加引號。
 - 環境由 **uv** 管理：一律以 `uv run` 執行（例：`uv run python scripts\check_env.py`、`uv run pytest -q`）；
-  新增套件用 `uv add`，**不可直接 `pip install`**。PyTorch 必須維持 CPU index（見 `pyproject.toml`）。
+  新增套件用 `uv add`，**不可直接 `pip install`**。PyTorch 的來源依平台固定（見 `pyproject.toml`）：開發機（Windows）維持 CPU index，
+  Jetson（Linux aarch64）用官方 cu132 index；不可改成其他來源。
 - `uv.lock` 必須進版控。
 - Parakeet（`parakeet-tdt-v2`）暫緩：只保留空殼與 `enabled: false` 的設定檔，不安裝 NeMo。
 
