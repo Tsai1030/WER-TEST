@@ -1,5 +1,6 @@
 """實驗矩陣執行。唯一可以串接其他 library 子模組的地方。"""
 
+from library.runner.assistant import AssistantConfig, LiveAssistant, load_assistant_config
 from library.runner.bench import BenchResult, bench_model, inferences_per_model
 from library.runner.checkpoint import Checkpoint
 from library.runner.config import ExperimentConfig, load_config
@@ -25,9 +26,11 @@ from library.runner.wake import (
 
 __all__ = [
     "OUTPUT_FILES",
+    "AssistantConfig",
     "BenchResult",
     "Checkpoint",
     "ExperimentConfig",
+    "LiveAssistant",
     "WakeConfig",
     "bench_model",
     "build_episodes",
@@ -36,6 +39,7 @@ __all__ = [
     "inferences_per_model",
     "iter_matrix",
     "kws_variants",
+    "load_assistant_config",
     "load_config",
     "load_wake_config",
     "make_degraded_set",

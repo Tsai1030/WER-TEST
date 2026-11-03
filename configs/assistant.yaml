@@ -1,0 +1,35 @@
+# 整段語音助理手動實測（scripts/10_assistant_live.py）：麥克風 → 講完判斷 → STT → LLM → TTS → 喇叭
+# LLM（llama-server）與 TTS（services/tts_server）要先另外啟動；預設值為板子上的建議組合（Pipeline Round 1）
+name: assistant
+paths:
+  out_dir: data/assistant        # 錄音、回覆音檔與紀錄（只放本機，不可公開）
+
+asr:
+  model: granite-470m
+  device: cuda                   # cuda 不可用時自動退回 cpu
+  dtype: fp16                    # 板子上三個模型同時放時，fp32 會把記憶體用光（Pipeline Round 1）
+  num_threads: 4
+
+endpoint: { threshold: 0.5, min_silence_ms: 1000, no_speech_timeout_s: 5.0, max_utterance_s: 15.0 }   # 同 Round 4 的建議
+
+llm:
+  url: http://127.0.0.1:8090     # llama-server（services/llama_cpp/README.md）
+  system: >-
+    You are a helpful voice assistant. Reply in one to three short sentences of plain spoken English.
+    No lists, no markdown, no emojis.
+  max_tokens: 96
+  temperature: 0.0               # greedy：同一個問題每次回覆相同
+  history_turns: 0               # 帶入前幾輪對話；0 = 每句獨立（與 Pipeline Round 1 相同）
+  extra: { chat_template_kwargs: { enable_thinking: false } }   # Qwen3：關掉 thinking
+
+tts:
+  host: 127.0.0.1
+  port: 8091
+  voice: F1
+  lang: en
+
+live:
+  input_device: null             # null = 系統預設麥克風；可填 sounddevice 的裝置編號（--list-devices）
+  output_device: null            # null = 系統預設喇叭
+  listen_during_reply: false     # false：回覆播完才繼續收音（外放喇叭時避免收到自己的回覆聲）
+  save: true                     # 每輪存錄音、回覆音檔與紀錄到 paths.out_dir

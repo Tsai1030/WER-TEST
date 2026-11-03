@@ -13,7 +13,9 @@
 | monitor/ | 記憶體、延遲量測 | ResourceMonitor, Timer |
 | kws/ | 喚醒詞偵測（sherpa-onnx） | KeywordSpotter |
 | endpoint/ | 講完判斷（串流 VAD） | Endpointer, decide |
-| runner/ | 實驗矩陣執行；Round 4 喚醒測試與即時實測 | run_experiment, run_kws_negative, LiveDemo |
+| llm/ | LLM client（連到另外啟動的 llama-server，串流） | LLMClient |
+| tts/ | TTS client（連到另外啟動的 services/tts_server） | TTSClient |
+| runner/ | 實驗矩陣執行；Round 4 喚醒測試與即時實測；整段語音助理實測 | run_experiment, run_kws_negative, LiveDemo, LiveAssistant |
 | export/ | 輸出結果檔 | ResultWriter, validate_results |
 | utils/ | 路徑、log、seed | — |
 

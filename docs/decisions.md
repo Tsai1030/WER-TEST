@@ -15,6 +15,16 @@
 
 ---
 
+## 2026-11-03：整段語音助理：LLM 與 TTS 為外部服務，專案內只放 client；新增 library/llm、library/tts、services/
+- 決定：手動實測工具 scripts/10_assistant_live.py（library/runner/assistant.py）串接麥克風 → 講完判斷 → STT → LLM → TTS → 喇叭。
+  LLM 用 llama.cpp 的 llama-server（OpenAI 相容 API），TTS 用 services/tts_server（Supertonic 3，自己的 uv 環境，Python 3.12）；
+  library/llm、library/tts 只是標準函式庫的 client，不載入模型。專案環境與 pyproject.toml 不加套件、不加套件來源。
+- 理由：板子 GPU 上的 Supertonic 要用 Jetson AI Lab 的 onnxruntime-gpu，只有 Python 3.12 版，專案固定 3.11；
+  LLM 用 transformers 在板子上只有約 9 token/s，llama.cpp 約 32–48 token/s（Pipeline Round 1）。
+- 替代方案：`uv add supertonic` 進專案（板子上只能用 CPU，RTF 約 1.06）；專案改成 Python 3.12（改動最大，要重驗之前的結果）。
+- 影響範圍：library/llm、library/tts、library/runner/assistant.py、configs/assistant.yaml、scripts/10_assistant_live.py、
+  services/tts_server（pyproject.toml、uv.lock 含 Jetson AI Lab 套件來源，只用於該服務）、services/llama_cpp/README.md。
+
 ## 2026-11-03：模型改為直接載入到目標裝置（device_map）；新增 accelerate
 - 決定：三個模型的 `from_pretrained` 加上 `device_map=self.device`，不再先載到 CPU 再 `.to(device)`；
   依 transformers 的要求以 `uv add` 加入 `accelerate`。

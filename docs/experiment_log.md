@@ -15,6 +15,77 @@
 
 ---
 
+## 2026-11-03：Pipeline Round 1（STT → LLM → TTS 整段流程，板子 GPU）
+- 設定：暫存腳本（之後整理為 configs/assistant.yaml、library/runner/assistant.py、scripts/10_assistant_live.py）
+- 範圍：英文 10 題助理問句（Supertonic M2 聲音合成、重取樣成 16 kHz）+ 1 題暖機；7 組設定，每組在新的程式中從閒置開始量
+- 流程：granite-470m（PyTorch GPU）→ LLM 串流 → 每產生完一句交給 Supertonic 3（GPU、補齊 96 / 128，F1 聲音，獨立程式）；
+  LLM greedy、最多 96 token、不開 thinking，系統提示要求一到三句口語回答；時間起點 = 音檔送進 STT（不含 VAD 講完判斷與音效卡）
+- 記憶體：tegrastats 每 0.5 秒記錄整塊板子，依載入順序拆段；各段分界受量測時間點影響（同一設定重跑可差約 0.4 GB），峰值較可靠
+
+### 觀察
+| 設定 | LLM token/s | 開始出聲（中位數，範圍） | 全部合成完 | 全部播完 | 記憶體峰值 |
+|---|---|---|---|---|---|
+| Qwen3.5-0.8B bf16 · transformers · granite fp32 | 4.2 | 15.82 s（8.37–32.83） | 15.82 s | — | 7,171 MB |
+| Qwen3.5-0.8B bf16 · transformers | 7.2 | 2.93 s（2.17–6.57） | 3.81 s | 9.11 s | 6,520 MB |
+| Qwen3-0.6B bf16 · transformers | 8.9 | 2.24 s（1.57–3.92） | 2.43 s | 7.64 s | 6,352 MB |
+| Qwen3-0.6B Q8_0 · llama.cpp | 48.4 | 0.87 s（0.63–1.79） | 0.87 s | 6.07 s | 5,813 MB |
+| **Qwen3-1.7B Q4_K_M · llama.cpp** | **32.3** | **0.87 s（0.62–1.54）** | **0.87 s** | **4.34 s** | **6,413 MB** |
+| Qwen3-1.7B · llama.cpp · 第一段遇逗號先送 | 32.2 | 0.85 s（0.63–1.54） | 0.85 s | — | 6,347 MB |
+| Qwen3.5-2B Q4_K_M · llama.cpp | 24.5 | 2.04 s（1.01–2.64） | 2.48 s | 10.62 s | 7,126 MB |
+
+- 全部播完 = 開始出聲 + 回覆音訊長度 + 播放中斷（由 rows.json 計算；所有設定都沒有中斷），主要由回覆長短決定。
+- **granite fp32**：三個模型同時放時板子記憶體升到 7.17 / 7.48 GB，系統在搬記憶體，CPU 與 GPU 大多閒置，每一段都慢數倍；fp16 正常。
+- **transformers 的 LLM 很慢與架構無關**：Qwen3.5（3/4 為 linear attention、加速套件未安裝）7.2 token/s，一般架構的 Qwen3-0.6B 也只有
+  8.9 token/s；執行時 GPU 平均使用率 22–31%，一個 CPU 核心滿載（每個 token 的 Python / kernel 啟動負擔在板子 CPU 上很重）。
+  同一個 Qwen3-0.6B 改用 llama.cpp v0.8.0（CUDA、sm_87）後 48.4 token/s、第一個 token 0.03 s，記憶體少約 0.5 GB。
+- Qwen3-1.7B（llama.cpp）：開始出聲 0.87 s ≈ STT 0.09 + LLM 第一句 0.42 + TTS 第一句 0.34（各段中位數）。
+- 逗號先送：第一段送給 TTS 提早（例：0.52 → 0.19 s），但 LLM 仍在產生、與 TTS 互搶 GPU，TTS 變慢（0.56 → 0.91 s），幾乎抵銷。
+- Qwen3.5-2B：回覆較長，第一句常超過補齊長度（96 格），TTS 沒補齊而變慢；峰值只剩約 0.36 GB。
+- 回答品質（7 題人工判讀）：Qwen3-1.7B 最穩（提醒、180 分鐘、arigatou 正確；月球「永久黑暗面」為常見誤解）；
+  Qwen3.5-2B 算錯「3 小時 = 1800 分鐘」、說紅光散射較多；0.6B / 0.8B 多題錯誤。設計時器、關燈這類指令四個模型都不能真的執行。
+
+### 結論
+- 建議組合：granite-470m fp16 + Qwen3-1.7B Q4_K_M（llama.cpp）+ Supertonic 3（補齊 96 / 128）：開始出聲中位數 0.87 s，
+  峰值 6.4 GB（剩約 1.1 GB）。
+- 板子上 LLM 不要用 transformers 逐 token 產生；改用 llama.cpp。
+- 限制：合成語音輸入、10 題、每組只跑一次；不含 VAD 講完判斷（Round 4 建議 1000 ms）、錄音與喇叭延遲；量化對品質的影響沒有另外量。
+
+### 下一步
+- 接 USB 麥克風與喇叭，用 scripts/10_assistant_live.py 實測真人說話（含講完判斷）。
+- 指令類問題需要接工具呼叫（計時器、燈光）。
+
+---
+
+## 2026-11-03：TTS Round 1（Supertonic 3，英文、日文）
+- 設定：暫存腳本（TTS 服務之後整理為 services/tts_server）
+- 範圍：supertonic 1.3.1、模型 supertonic-3（約 400 MB，不支援中文）、預設 8 步、語速 1.05、ONNX Runtime 4 執行緒；
+  聲音 F1、M1 × 英文、日文各 10 句助理回覆，共 40 句
+- 平台：開發機 CPU；板子 CPU；板子 GPU（NVIDIA Jetson AI Lab 的 onnxruntime-gpu 1.24.0、cuDNN 9.26）。PyPI 的 aarch64 版
+  onnxruntime-gpu 1.31.1 沒有 Orin（sm_87）的 GPU 程式碼，執行時出現 `cudaErrorNoKernelImageForDevice`
+
+### 觀察
+| 平台 | 每句平均（英 / 日） | RTF（英 / 日） | 板子記憶體增加量 |
+|---|---|---|---|
+| 開發機 CPU | 2.06 / 2.08 s | 0.61 / 0.57 | —（RSS 550 MB） |
+| 板子 CPU | 3.57 / 3.86 s | 1.07 / 1.06 | 565 MB |
+| 板子 GPU | 0.92 / 0.92 s | 0.28 / 0.25 | 844 MB |
+| 板子 GPU + 補齊 96 / 128 | **0.33 / 0.33 s** | **0.10 / 0.09** | 948 MB |
+| 板子 GPU + 補齊 128 / 192 | 0.42 / 0.42 s | 0.13 / 0.12 | 1,003 MB |
+
+- 原版 GPU 每句都約 0.9 s、與句長無關：ORT profiler 顯示每次輸入長度改變時 Conv 要重新準備（四個模型合計多約 0.59 s），
+  回到以前出現過的長度也一樣；長度不變時同一句只要約 0.28 s。cuDNN 的 DEFAULT 演算法選擇更慢（約 2.2 s），
+  `cudnn_conv_use_max_workspace=0`、`cudnn_conv1d_pad_to_nc1d=1` 沒有改善；TensorRT 需要 TensorRT 10，板子沒有，未測。
+- 補齊：文字補零到 96 格、latent 補零到 128 格（約 8.9 秒音訊）後長度固定，每句約 0.33 s。duration_predictor 與 text_encoder
+  沒有完全忽略補零（時長差約 1%），所以波形與原版不同；官方多句批次合成也是這樣補零，尚未做聽感確認。
+- GPU 第一次合成要暖機約 1.5 s（板子上第一次執行還要編譯，約 10 s，之後有快取）。
+
+### 結論
+- 板子上 TTS 用 GPU + 補齊 96 / 128：開始出聲（第一句合成時間）約 0.33 s，記憶體約 0.95 GB。
+- Supertonic 不是串流式：整句算完才輸出，回覆要一句一句交給 TTS。
+- 限制：只測預設 8 步、25W 模式；補齊版待聽感確認；中文需要另找模型。
+
+---
+
 ## 2026-11-03：Nano Round 1（Jetson Orin Nano 實機複驗，GPU）
 - 設定：configs/jetson_round3.yaml（git commit：5858925；device_map 載入與 accelerate 待提交）
 - 範圍：Round 3 的模型 × 方法（granite baseline / vad；whisper baseline / vad / greedy；qwen3 baseline / vad / beam）×

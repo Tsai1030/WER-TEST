@@ -17,6 +17,7 @@
 | configs/ | 所有實驗參數 |
 | library/ | 核心函式庫，可 import 呼叫 |
 | scripts/ | 命令列入口 |
+| services/ | 外部服務（TTS 服務、llama.cpp 的 LLM 服務），各有自己的環境，不裝進專案環境 |
 | data/ | 資料（不進版控） |
 | results/ | 實驗輸出 |
 | dashboard/ | 結果網頁的資料規格 |

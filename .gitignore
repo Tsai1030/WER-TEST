@@ -22,4 +22,8 @@ results/**/*.log
 results/**/checkpoint.json
 results/smoke/
 
+# 外部服務的模型與編譯結果（見 services/*/README.md）
+services/tts_server/models/
+services/llama_cpp/llama.cpp/
+
 # 注意：uv.lock 必須進版控，不可加入此清單
