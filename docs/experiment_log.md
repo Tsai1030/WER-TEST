@@ -15,6 +15,93 @@
 
 ---
 
+## 2026-11-03：Nano Round 1（Jetson Orin Nano 實機複驗，GPU）
+- 設定：configs/jetson_round3.yaml（git commit：5858925；device_map 載入與 accelerate 待提交）
+- 範圍：Round 3 的模型 × 方法（granite baseline / vad；whisper baseline / vad / greedy；qwen3 baseline / vad / beam）×
+  10 種條件（加回 Round 1 的 snr20、snr10、snr05、reverb）× 50 句（noise_only 10 段），共 3,680 列
+- 平台：Jetson Orin Nano 8GB Super、JetPack 7（L4T R39.2.1）、CUDA 13.2、PyTorch 2.15.0+cu132、25W 模式；fp32、PyTorch 直接執行
+- 執行：
+  - 11-02 晚 granite、whisper（2,300 列）；載入 qwen3 時舊的載入方式（先載到 CPU 再搬到 GPU）讓記憶體用滿，00:24 看門狗重開機
+  - 改為 `device_map` 直接載入到目標裝置（見 decisions.md 2026-11-03）後，11-03 07:51 → 08:33 由 checkpoint 續跑 qwen3（1,380 列）；
+    04_validate_results 通過；data/raw 不變
+  - RAM 峰值另外量：每個模型在新程式中載入並辨識 clean 10 句，tegrastats 每 0.5 秒記錄整塊板子的已用記憶體，增加量 = 峰值 − 啟動前閒置值。
+    granite 第一次量測時同時在板子上跑了結果驗證，已單獨重量（取第二次）
+- Windows 參照：Round 3（i3-10110U CPU、fp32）；snr20、snr10、snr05、reverb 只有 Round 1 的 baseline
+
+### 觀察
+
+**WER**：所有模型 × 方法逐句輸出（正規化後）與 Windows **100% 相同**（可對照的 2,680 句），WER 完全一致。
+
+| 模型 · 方法 | WER（Round 3 五種語音條件） |
+|---|---|
+| granite baseline / vad | 3.5% / 3.5% |
+| whisper baseline / vad / greedy | 6.7% / 6.7% / 7.1% |
+| qwen3 baseline / vad / beam | 4.7% / 4.7% / 4.4% |
+
+**RTF**（Round 3 五種語音條件 250 句：總處理時間 ÷ 總音訊長度）
+
+| 模型 · 方法 | Windows CPU | 板子 GPU | 加速 | 板子每句平均 |
+|---|---|---|---|---|
+| granite baseline | 0.348 | **0.031** | 11.2× | 156 ms |
+| granite vad | 0.350 | 0.082 | 4.3× | 414 ms |
+| whisper baseline | 1.996 | **0.349** | 5.7× | 1,771 ms |
+| whisper vad | 2.047 | 0.394 | 5.2× | 1,997 ms |
+| whisper greedy | 1.026 | 0.179 | 5.7× | 911 ms |
+| qwen3 baseline | 1.006 | **0.293** | 3.4× | 1,485 ms |
+| qwen3 vad | 1.006 | 0.334 | 3.0× | 1,693 ms |
+| qwen3 beam | 2.911 | 0.438 | 6.6× | 2,221 ms |
+
+- 第一句含 GPU 暖機：RTF granite 0.70、whisper 0.97、qwen3 1.56。
+- 板子上 VAD 的固定成本（Silero，CPU）相對變大：granite 加 VAD 後每句多約 260 ms，RTF 由 0.031 變 0.082。
+
+**RAM 峰值**（板子整體增加量，CPU 與 GPU 共用，含 CUDA / PyTorch 函式庫）
+
+| 模型 | 板子增加量 | torch GPU 峰值（完整測試） | 板子載入 | Windows RSS 峰值 | Windows 載入 |
+|---|---|---|---|---|---|
+| granite-470m | 2,213 MB | 1,836 MB | 27.9 s | 2,291 MB | 33.1 s |
+| whisper-small | 2,320 MB | 1,521 MB | 24.3 s | 3,849 MB | 50.0 s |
+| qwen3-asr-0.6b | 3,665 MB | 3,112 MB（beam 3,527） | 34.7 s | 3,773 MB | 6.9 s |
+
+- 板子閒置約 1,424 MB（tegrastats 的已用值），總共 7,485 MB；qwen3 載入後板子峰值 5,089 MB。
+- 量測只用 baseline 解碼；qwen3 beam 的 GPU 峰值比 baseline 多約 400 MB。
+- 量法不同：板子是系統整體增加量，Windows 是行程 RSS，只能粗略對照。
+
+### 結論
+- **換到板子 GPU 不影響辨識結果**：fp32 下逐句輸出完全相同，Windows 的 WER 結論可以直接沿用。
+- **速度**：三個模型在板子上都遠快於即時（RTF < 0.5）；granite 每句約 0.16 秒，最快。
+- **記憶體**：granite、whisper 約 2.2–2.3 GB，qwen3 約 3.7 GB；7.4 GB 的板子可放一個模型加喚醒詞與 VAD，
+  但舊的載入方式（先 CPU 後 GPU）會讓峰值翻倍，qwen3 因此撐爆記憶體。
+- 限制：fp32、PyTorch 直接執行，不是量化（q4）或 TensorRT 的部署數字；25W 模式；板子為共用。
+
+### 下一步
+- 部署版本：q4 / TensorRT 後重量 WER、RTF、RAM。
+
+---
+
+## 2026-11-03：Nano Round 2（Round 4 的 B、D、E 在板子 CPU 上重跑）
+- 設定：板子上的 configs/round4_jetson_cpu.yaml（與 round4.yaml 相同，只改 output_dir 為 results/jetson_cpu/round4；未進版控）
+- 範圍：B 講完判斷模擬（1,500 情境 × 10 組參數）、D 整段流程（200 情境 × oracle / t0.5_s700 / t0.5_s1000，granite-470m CPU）、
+  E 待機成本；A 誤喚醒與 C 正確喚醒未在板子上跑
+- 執行：板子 CPU（6 核 ARM、25W 模式）、fp32，2026-11-02 22:41 → 23:30（仍用 CPU 版 PyTorch）
+
+### 觀察
+- **B、D 的結果與開發機完全相同**：截斷率、失控率、等待時間、WER、ΔWER 與判定一致，規則同樣選出 t0.5_s700，
+  D 中同樣顯著變差（+1.77 百分點），最終建議仍為 t0.5_s1000。
+- 時間（t0.5_s1000）：granite 辨識中位數 1.68 → 2.68 秒，講完到出字中位數 2.72 → 3.68 秒（p90 3.92 → 4.56）。
+
+| 元件 | CPU（開發機 → 板子） | 每塊處理中位數 / p99（ms） | 記憶體（MB） |
+|---|---|---|---|
+| 喚醒詞 kws-zh / kws-zh-en | 3.3% → 8.7% | 0.24 / 14 → 0.60 / 27 | 51 → 51 |
+| Silero VAD | 1.6% → 16.3% | 0.44 / 1.2 → 1.61 / 3.0 | 167 → 196 |
+| granite-470m（CPU 常駐） | — | — | 2,140 → 3,306 |
+
+### 結論
+- 講完判斷的參數與選擇不受平台影響，板子上沿用 t0.5_s1000。
+- 板子 CPU 比開發機慢：VAD 的 CPU 佔用約為開發機的 10 倍（每塊 1.6 ms，仍遠小於 32 ms，跟得上）。
+- 辨識放在板子 CPU 上，講完到出字約 3.7 秒；改用 GPU（Nano Round 1：granite 每句約 0.16 秒）可大幅縮短。
+
+---
+
 ## 2026-10-31：Round 4 自動測試（喚醒詞誤喚醒、講完判斷模擬、整段流程、待機成本）
 - 設定：configs/round4.yaml（git commit：A、B 為 df03544；D、E 待提交）；規格與選擇規則見 plan.md 15.3–15.4（執行前訂定；D 的規則為 v0.9，在 B 之後、D 之前訂定）
 - 範圍：

@@ -16,6 +16,7 @@ dependencies = [
   "torchaudio",
   "transformers>=5.16",
   "whisper-normalizer>=0.1.15",
+  "accelerate>=1.15.0",
 ]
 
 [project.optional-dependencies]

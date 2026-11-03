@@ -127,7 +127,12 @@ def test_full_run_outputs_pass_validation(cfg: ExperimentConfig) -> None:
     assert (base["hyp_raw"], base["S"], base["D"], base["N"], float(base["wer"])) == ("the cat sat", "0", "1", "4", 0.25)
     res = pd.read_csv(out / "resources.csv", encoding="utf-8", dtype=str, keep_default_na=False)
     assert list(res["method"]) == ["baseline", "vad"]
-    assert (res["gpu_measure"] == "none").all() and (res["peak_gpu_mb"] == "").all()
+    import torch
+
+    if torch.cuda.is_available():  # Jetson：偵測到 CUDA 時一律以 torch 量 GPU 記憶體
+        assert (res["gpu_measure"] == "torch").all() and (res["peak_gpu_mb"] != "").all()
+    else:
+        assert (res["gpu_measure"] == "none").all() and (res["peak_gpu_mb"] == "").all()
     assert float(res["peak_ram_mb"].iloc[0]) > 0
 
 

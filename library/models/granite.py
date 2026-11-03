@@ -24,9 +24,10 @@ class GraniteModel(ASRModel):
         self.device, self.dtype = resolve_device(device), dtype
         self._processor = AutoProcessor.from_pretrained(self.hf_id, revision=self.revision)
         model = GraniteSpeech5ForCTC.from_pretrained(
-            self.hf_id, revision=self.revision, dtype=torch_dtype(dtype)
+            self.hf_id, revision=self.revision, dtype=torch_dtype(dtype),
+            device_map=self.device,  # 直接載入到目標裝置（Jetson 統一記憶體下避免 CPU、GPU 各存一份）
         )
-        self._model = model.to(self.device).eval()
+        self._model = model.eval()
 
     def transcribe(self, wav: np.ndarray, sr: int = 16000) -> Transcript:
         """CTC greedy 解碼，回傳原始文字。"""

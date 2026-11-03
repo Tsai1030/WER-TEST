@@ -15,6 +15,16 @@
 
 ---
 
+## 2026-11-03：模型改為直接載入到目標裝置（device_map）；新增 accelerate
+- 決定：三個模型的 `from_pretrained` 加上 `device_map=self.device`，不再先載到 CPU 再 `.to(device)`；
+  依 transformers 的要求以 `uv add` 加入 `accelerate`。
+- 理由：Jetson 複驗時載入 qwen3-asr（fp32）讓整塊板子的記憶體在 17 秒內由 3.1 GB 升到 7.35 GB / 7.49 GB，
+  系統卡死、2 分鐘後被硬體看門狗重開機（tegrastats 紀錄，2026-11-03 00:19–00:24）。Jetson 的 CPU 與 GPU
+  共用記憶體，先載到 CPU 再複製到 GPU 等於同一份權重佔兩倍。
+- 驗證：開發機 CPU 上三個模型各 3 句 clean 的輸出與 Round 3 完全相同；158 項測試通過。
+- 影響範圍：`library/models/{granite,whisper,qwen3_asr}.py`、`pyproject.toml`、`uv.lock`。
+  中斷前已完成的 granite、whisper（2,300 筆）是舊載入方式，WER / RTF 不受影響，載入時的記憶體峰值偏高。
+
 ## 2026-11-02：Jetson 改用 GPU 版 PyTorch；新增 Jetson 複驗設定
 - 決定：`pyproject.toml` 的 torch 來源依平台區分：Linux aarch64 用 PyTorch 官方 cu132 index
   （`2.15.0+cu132`），其他平台維持 CPU index（開發機仍為 `2.15.0+cpu`，版本號相同）；torchaudio 一律 CPU 版。
