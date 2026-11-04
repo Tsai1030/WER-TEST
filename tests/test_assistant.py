@@ -1,9 +1,12 @@
-"""整段語音助理：設定讀取、句子切分與各段時間計算（不需要模型、麥克風或服務）。"""
+"""整段語音助理：設定讀取、句子切分、各段時間計算與裝置取樣率選擇（不需要模型、麥克風或服務）。"""
 
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 
 from library.runner import load_assistant_config
-from library.runner.assistant import split_sentences, turn_timings
+from library.runner.assistant import device_rate, split_sentences, turn_timings
 
 
 def test_config_loads_and_overrides_skip_none() -> None:
@@ -40,3 +43,26 @@ def test_turn_timings_relative_to_speech_end_and_stt_start() -> None:
     assert tm["first_audio_s"] == pytest.approx(1.86) and tm["play_end_s"] == 5.0
     assert tm["stt_to_first_audio_s"] == pytest.approx(0.86) and tm["stt_to_play_end_s"] == 4.0
     assert turn_timings({k: v for k, v in t.items() if k != "llm_first_token"})["llm_ttft_s"] is None
+
+
+def test_device_rate_falls_back_to_device_default() -> None:
+    class PortAudioError(Exception):
+        pass
+
+    def check(device: object, samplerate: int, channels: int) -> None:
+        if samplerate not in (44100, 48000):
+            raise PortAudioError("Invalid sample rate")
+
+    sd = SimpleNamespace(PortAudioError=PortAudioError, check_input_settings=check, check_output_settings=check,
+                         query_devices=lambda device, kind: {"default_samplerate": 44100.0})
+    assert device_rate(sd, 24, "input", 16000) == 44100  # USB 音效卡不支援 16 kHz
+    assert device_rate(sd, 24, "output", 48000) == 48000
+
+
+def test_mic_stream_resampled_to_16k_keeps_length() -> None:
+    import soxr
+
+    rs = soxr.ResampleStream(44100, 16000, 1, dtype="float32")
+    blocks = [rs.resample_chunk(np.zeros(4410, dtype=np.float32)) for _ in range(10)]  # 10 × 100 ms
+    assert 15000 < sum(len(b) for b in blocks) <= 16000  # 只差重取樣濾波器的延遲（開頭約 20 ms）
+    assert all(b.dtype == np.float32 and b.ndim == 1 for b in blocks)

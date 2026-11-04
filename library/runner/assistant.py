@@ -2,7 +2,8 @@
 
 LLM（llama-server）與 TTS（services/tts_server）是另外啟動的服務，這裡只透過 library.llm / library.tts 的 client 連線。
 LLM 每產生完一句就交給 TTS，第一句合成好就開始播放；每一輪印出並記錄各段時間。
-錄音、回覆音檔與紀錄只存在 data/assistant/（不進版控、不可公開）。sounddevice 於函式內 import。
+錄音、回覆音檔與紀錄只存在 data/assistant/（不進版控、不可公開）。sounddevice、soxr 於函式內 import。
+音效卡不支援 16 kHz 收音（或 TTS 的取樣率播放）時，改用裝置預設取樣率開啟，收音即時轉成 16 kHz、播放前轉成裝置取樣率。
 """
 
 import json
@@ -110,6 +111,28 @@ def turn_timings(t: dict) -> dict:
     }
 
 
+def device_rate(sd: object, device: int | str | None, kind: str, want: int) -> int:
+    """選擇音訊裝置的取樣率：支援 want 就用 want，否則用裝置預設取樣率。
+
+    ALSA 的 hw 裝置（例如 USB 音效卡）不會自動轉換取樣率，常只支援 44.1 / 48 kHz。
+
+    參數:
+        sd: sounddevice 模組。
+        device: 裝置編號或名稱；None = 系統預設。
+        kind: "input" 或 "output"。
+        want: 想要的取樣率。
+
+    回傳:
+        要用來開啟裝置的取樣率。
+    """
+    check = sd.check_input_settings if kind == "input" else sd.check_output_settings
+    try:
+        check(device=device, samplerate=want, channels=1)
+        return want
+    except sd.PortAudioError:
+        return int(sd.query_devices(device, kind)["default_samplerate"])
+
+
 class LiveAssistant:
     """即時對話：持續收音 → 講完判斷 → STT → LLM 串流 → 一句一句 TTS 並播放，印出並記錄各段時間。
 
@@ -122,6 +145,7 @@ class LiveAssistant:
         self.ep_params = endpoint_params(cfg.endpoint)
         self.history: list[dict] = []
         self.llm_model: str | None = None
+        self._out_rates: dict[int, int] = {}  # TTS 取樣率 → 喇叭取樣率
 
     def _log(self, row: dict) -> None:
         if not self.cfg.live.get("save", True):
@@ -149,6 +173,7 @@ class LiveAssistant:
             ImportError: 未安裝 sounddevice / silero-vad（uv sync --extra wake --extra audio）。
         """
         import sounddevice as sd
+        import soxr
 
         cfg, lv = self.cfg, self.cfg.live
         llm, tts, tts_info = self._connect()
@@ -168,12 +193,15 @@ class LiveAssistant:
         for _ in llm.stream_chat([{"role": "user", "content": "Hi"}], max_tokens=4, extra=cfg.llm.get("extra")):
             pass
         q: queue.Queue = queue.Queue()
-        print(f"麥克風：{sd.query_devices(lv.get('input_device'), 'input')['name']}；"
+        mic_sr = device_rate(sd, lv.get("input_device"), "input", SAMPLE_RATE)
+        rs = None if mic_sr == SAMPLE_RATE else soxr.ResampleStream(mic_sr, SAMPLE_RATE, 1, dtype="float32")
+        print(f"麥克風：{sd.query_devices(lv.get('input_device'), 'input')['name']}"
+              f"{f'（{mic_sr} Hz 收音，轉成 {SAMPLE_RATE} Hz）' if rs else ''}；"
               f"喇叭：{sd.query_devices(lv.get('output_device'), 'output')['name']}")
         print(f"講完判斷：靜音 {self.ep_params['min_silence_ms']:.0f} ms；"
               f"回覆期間{'繼續收音（建議戴耳機）' if lv.get('listen_during_reply') else '不收音'}。Ctrl+C 結束。\n")
         n = 0
-        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", blocksize=_BLOCK,
+        with sd.InputStream(samplerate=mic_sr, channels=1, dtype="float32", blocksize=round(_BLOCK * mic_sr / SAMPLE_RATE),
                             device=lv.get("input_device"), callback=lambda data, *_: q.put(data[:, 0].copy())):
             try:
                 while True:
@@ -182,6 +210,8 @@ class LiveAssistant:
                     r = None
                     while r is None:
                         chunk = q.get()
+                        if rs is not None:
+                            chunk = rs.resample_chunk(chunk)
                         buf.append(chunk)
                         r = es.push(chunk)
                     if r.reason == "no_speech":
@@ -232,9 +262,14 @@ class LiveAssistant:
                 play_q.put(None)
 
         def _play() -> None:
+            import soxr
+
+            out_dev = cfg.live.get("output_device")
             while (res := play_q.get()) is not None:
+                sr = self._out_rates.setdefault(res.sample_rate, device_rate(sd, out_dev, "output", res.sample_rate))
+                wav = res.wav if sr == res.sample_rate else soxr.resample(res.wav, res.sample_rate, sr).astype(np.float32)
                 start = time.perf_counter()
-                sd.play(res.wav, res.sample_rate, device=cfg.live.get("output_device"))
+                sd.play(wav, sr, device=out_dev)
                 sd.wait()
                 plays.append((start, time.perf_counter()))
 

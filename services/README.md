@@ -11,4 +11,4 @@
 1. 啟動 LLM：見 llama_cpp/README.md（建議 Qwen3-1.7B Q4_K_M）。
 2. 啟動 TTS：`cd services/tts_server && uv run python server.py`（看到 TTS_READY）。
 3. 接上 USB 麥克風與喇叭（需要系統的 libportaudio2），在專案根目錄執行：
-   `uv run python scripts/10_assistant_live.py --list-devices`，再以 `--input-device` / `--output-device` 選裝置執行。
+   `uv run python scripts/10_assistant_live.py --list-devices`，再以 `--input-device` / `--output-device` 選裝置執行（USB 音效卡只支援 44.1 / 48 kHz 也可以直接用，程式會自動轉換取樣率）。
