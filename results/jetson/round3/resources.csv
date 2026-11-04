@@ -1,0 +1,9 @@
+model,method,peak_gpu_mb,peak_ram_mb,model_size_mb,load_time_s,gpu_measure
+granite-470m,baseline,1835.68603515625,4463.5,902.5,11.68,torch
+granite-470m,vad,1835.68603515625,4306.3,902.5,11.68,torch
+whisper-small,baseline,1520.5341796875,3693.3,922.2,44.0,torch
+whisper-small,vad,1520.5341796875,3701.2,922.2,44.0,torch
+whisper-small,greedy,1046.94091796875,3710.4,922.2,44.0,torch
+qwen3-asr-0.6b,baseline,3112.22021484375,4910.3,1492.4,36.44,torch
+qwen3-asr-0.6b,vad,3112.22021484375,4962.3,1492.4,36.44,torch
+qwen3-asr-0.6b,beam,3527.14404296875,5770.2,1492.4,36.44,torch

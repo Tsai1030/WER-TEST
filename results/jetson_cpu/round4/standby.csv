@@ -1,0 +1,8 @@
+component,model,num_threads,rss_before_mb,rss_after_mb,ram_load_mb,audio,audio_sec,unit_ms,proc_ms_med,proc_ms_p99,cpu_pct,rtf
+kws,kws-zh,1.0,111.6,162.3,50.7,speech,300.0,100.0,0.603,27.33,8.74,0.0878
+kws,kws-zh,1.0,111.6,162.3,50.7,noise,300.0,100.0,0.608,27.083,8.56,0.0864
+kws,kws-zh-en,1.0,111.6,162.9,51.3,speech,300.0,100.0,0.598,26.948,8.61,0.0864
+kws,kws-zh-en,1.0,111.6,162.9,51.3,noise,300.0,100.0,0.599,26.985,8.61,0.0865
+vad,silero,,111.6,307.6,196.0,speech,300.0,32.0,1.61,2.988,16.31,0.0546
+vad,silero,,111.6,307.6,196.0,noise,300.0,32.0,1.568,2.258,15.25,0.0514
+asr,granite-470m,4.0,73.4,3379.2,3305.8,,,,,,,
