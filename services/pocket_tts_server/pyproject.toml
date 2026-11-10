@@ -1,0 +1,30 @@
+# 串流 TTS 服務（Kyutai Pocket TTS）自己的環境，與專案環境分開（pocket-tts 需要 numpy 2，專案是 numpy 1.26）
+# PyTorch 來源同專案：Jetson（Linux aarch64）用官方 cu132 版，其他平台用 CPU 版
+[project]
+name = "pocket-tts-server"
+version = "0.1.0"
+requires-python = "==3.11.*"
+dependencies = [
+  "pocket-tts==4.0.1",
+  "torch==2.15.0",
+  "numpy",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu132", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+  { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine != 'aarch64'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true

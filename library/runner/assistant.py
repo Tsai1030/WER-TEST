@@ -1,7 +1,8 @@
 """整段語音助理的手動實測（scripts/10_assistant_live.py）：麥克風 → 講完判斷 → STT → LLM（串流）→ TTS → 喇叭。
 
 LLM（llama-server）與 TTS（services/tts_server）是另外啟動的服務，這裡只透過 library.llm / library.tts 的 client 連線。
-LLM 每產生完一句就交給 TTS，第一句合成好就開始播放；每一輪印出並記錄各段時間。
+LLM 每產生完一句就交給 TTS，第一句合成好就開始播放；TTS 服務支援串流（ping 回 "stream": true，services/pocket_tts_server）時
+每句邊合成邊播放。播放用一條持續寫入的 OutputStream。每一輪印出並記錄各段時間。
 錄音、回覆音檔與紀錄只存在 data/assistant/（不進版控、不可公開）。sounddevice、soxr 於函式內 import。
 音效卡不支援 16 kHz 收音（或 TTS 的取樣率播放）時，改用裝置預設取樣率開啟，收音即時轉成 16 kHz、播放前轉成裝置取樣率。
 """
@@ -31,6 +32,7 @@ log = get_logger(__name__)
 LIVE_LOG = "live_log.jsonl"
 _BLOCK = 1600  # 每次從麥克風取 100 ms
 SENT_END = re.compile(r"(?<=[.!?])\s+")
+COMMA = re.compile(r"(?<=,)\s+")
 _SECTIONS = ("asr", "endpoint", "llm", "tts", "live")
 
 
@@ -73,16 +75,22 @@ def load_assistant_config(path: str | Path, overrides: dict | None = None) -> As
     return AssistantConfig(name=raw["name"], out_dir=resolve_path(raw["paths"].get("out_dir", "data/assistant")), **sec)
 
 
-def split_sentences(buf: str) -> tuple[list[str], str]:
+def split_sentences(buf: str, comma_min_words: int = 0) -> tuple[list[str], str]:
     """把串流文字中已經完整的句子（以 . ! ? 加空白結尾）切出來。
 
     參數:
         buf: 目前累積、尚未送出的文字。
+        comma_min_words: > 0 時，還沒有完整句子的話，在第一個「逗號加空白」處先切出一段，
+            但逗號前至少要有這麼多個字（避免切出 "Sure," 這種太短、念起來不自然的片段）；0 = 不在逗號切。
 
     回傳:
         (完整句子清單, 剩下還沒結束的文字)。
     """
     parts = SENT_END.split(buf)
+    if len(parts) == 1 and comma_min_words > 0:
+        for m in COMMA.finditer(buf):
+            if len(buf[: m.start()].split()) >= comma_min_words:
+                return [buf[: m.start()].strip()], buf[m.end() :]
     return [p.strip() for p in parts[:-1] if p.strip()], parts[-1]
 
 
@@ -109,6 +117,22 @@ def turn_timings(t: dict) -> dict:
         "stt_to_first_audio_s": r("first_play", "decided"), "stt_to_all_synth_s": r("all_synth", "decided"),
         "stt_to_play_end_s": r("play_end", "decided"),
     }
+
+
+def compute_breakdown(vad_s: float, tm: dict, tts_total_s: float) -> dict:
+    """一輪各元件純計算時間的合計（不含等待靜音與播放）。
+
+    參數:
+        vad_s: 講完判斷（Silero VAD）累計計算時間。
+        tm: turn_timings() 的結果（取 stt_s、llm_total_s）。
+        tts_total_s: 所有句子 TTS 合成時間的總和。
+
+    回傳:
+        vad_compute_s、compute_total_s（VAD + STT + LLM 全部 + TTS 全部），四捨五入到毫秒。
+        LLM 與 TTS 同時進行，合計可能大於「講完 → 全部合成完」扣掉等待靜音的時間。
+    """
+    total = vad_s + (tm.get("stt_s") or 0.0) + (tm.get("llm_total_s") or 0.0) + tts_total_s
+    return {"vad_compute_s": round(vad_s, 3), "compute_total_s": round(total, 3)}
 
 
 def device_rate(sd: object, device: int | str | None, kind: str, want: int) -> int:
@@ -145,6 +169,8 @@ class LiveAssistant:
         self.ep_params = endpoint_params(cfg.endpoint)
         self.history: list[dict] = []
         self.llm_model: str | None = None
+        self.tts_stream = False  # TTS 服務是否支援串流（run() 連線時由 ping 得知）
+        self.tts_sample_rate = 0
         self._out_rates: dict[int, int] = {}  # TTS 取樣率 → 喇叭取樣率
 
     def _log(self, row: dict) -> None:
@@ -162,7 +188,7 @@ class LiveAssistant:
         try:
             info = tts.ping()
         except OSError as e:
-            raise RuntimeError(f"連不上 TTS 服務 {tts.host}:{tts.port}：請先啟動 services/tts_server（{e}）") from e
+            raise RuntimeError(f"連不上 TTS 服務 {tts.host}:{tts.port}：請先啟動 services/pocket_tts_server（{e}）") from e
         return llm, tts, info
 
     def run(self) -> None:
@@ -178,8 +204,11 @@ class LiveAssistant:
         cfg, lv = self.cfg, self.cfg.live
         llm, tts, tts_info = self._connect()
         self.llm_model = llm.model_id()
+        self.tts_stream = bool(tts_info.get("stream"))
+        self.tts_sample_rate = int(tts_info.get("sample_rate") or 0)  # 串流片段的取樣率（串流服務的 ping 提供）
+        mode = "串流" if self.tts_stream else f"補齊 {tts_info.get('pad')}"
         print(f"LLM：{self.llm_model}（{cfg.llm['url']}）；TTS：{tts_info.get('model')}（{tts_info.get('device')}，"
-              f"補齊 {tts_info.get('pad')}，聲音 {cfg.tts.get('voice', 'F1')}）")
+              f"{mode}，聲音 {cfg.tts.get('voice', 'F1')}）")
         ep = Endpointer()
         ep.load()
         asr = get_model(cfg.asr["model"])
@@ -208,18 +237,21 @@ class LiveAssistant:
                     es = ep.stream(self.ep_params)
                     buf: list[np.ndarray] = []
                     r = None
+                    vad_s = 0.0  # 講完判斷（Silero VAD）本身的計算時間，不含等待靜音
                     while r is None:
                         chunk = q.get()
                         if rs is not None:
                             chunk = rs.resample_chunk(chunk)
                         buf.append(chunk)
+                        t0 = time.perf_counter()
                         r = es.push(chunk)
+                        vad_s += time.perf_counter() - t0
                     if r.reason == "no_speech":
                         continue
                     t_decided = time.perf_counter()
                     n += 1
                     audio = np.concatenate(buf)[: round(r.end_sec * SAMPLE_RATE)]
-                    self._turn(n, audio, r, t_decided, asr, llm, tts, sd)
+                    self._turn(n, audio, r, t_decided, asr, llm, tts, sd, vad_s)
                     if not lv.get("listen_during_reply"):
                         while not q.empty():  # 丟掉處理與回覆期間收到的聲音（外放時含回覆聲）
                             q.get()
@@ -231,8 +263,11 @@ class LiveAssistant:
                 tts.close()
 
     def _turn(self, n: int, audio: np.ndarray, r: object, t_decided: float, asr: object, llm: LLMClient,
-              tts: TTSClient, sd: object) -> None:
-        """一輪：STT → LLM 串流（一句一句交給 TTS）→ 依序播放；印出並記錄各段時間。"""
+              tts: TTSClient, sd: object, vad_s: float = 0.0) -> None:
+        """一輪：STT → LLM 串流（一句一句交給 TTS）→ 依序播放；印出並記錄各段時間。
+
+        vad_s 為這一輪講完判斷（Silero VAD）累計的計算時間，不含等待靜音。
+        """
         cfg, lc, tc = self.cfg, self.cfg.llm, self.cfg.tts
         t = {"decided": t_decided, "speech_end": t_decided - (r.end_sec - r.speech_end_sec)}
         text = asr.transcribe(audio, SAMPLE_RATE).text.strip()
@@ -247,15 +282,22 @@ class LiveAssistant:
         synth_q: queue.Queue = queue.Queue()
         play_q: queue.Queue = queue.Queue()
         synths: list[tuple[str, object, float]] = []  # (句子, TTSResult, 合成完成時間)
-        plays: list[tuple[float, float]] = []
         errors: list[Exception] = []
+        voice, lang = tc.get("voice", "F1"), tc.get("lang", "en")
 
         def _synth() -> None:
             try:
                 while (s := synth_q.get()) is not None:
-                    res = tts.synthesize(s, tc.get("voice", "F1"), tc.get("lang", "en"))
+                    if self.tts_stream:  # 每收到一段就交給播放
+                        for chunk in tts.synthesize_stream(s, voice, lang):
+                            t.setdefault("first_synth", time.perf_counter())
+                            play_q.put((chunk, None))
+                        res = tts.last_result
+                    else:
+                        res = tts.synthesize(s, voice, lang)
+                        t.setdefault("first_synth", time.perf_counter())
+                        play_q.put((res.wav, res.sample_rate))
                     synths.append((s, res, time.perf_counter()))
-                    play_q.put(res)
             except Exception as e:  # noqa: BLE001  讓主執行緒顯示錯誤，不卡住
                 errors.append(e)
             finally:
@@ -264,25 +306,42 @@ class LiveAssistant:
         def _play() -> None:
             import soxr
 
-            out_dev = cfg.live.get("output_device")
-            while (res := play_q.get()) is not None:
-                sr = self._out_rates.setdefault(res.sample_rate, device_rate(sd, out_dev, "output", res.sample_rate))
-                wav = res.wav if sr == res.sample_rate else soxr.resample(res.wav, res.sample_rate, sr).astype(np.float32)
-                start = time.perf_counter()
-                sd.play(wav, sr, device=out_dev)
-                sd.wait()
-                plays.append((start, time.perf_counter()))
+            out_dev, stream, rs = cfg.live.get("output_device"), None, None
+            try:
+                while (item := play_q.get()) is not None:
+                    wav, sr_in = item
+                    if stream is None:  # 第一段到達時開喇叭；串流片段的取樣率由服務 ping 得知
+                        sr_in = sr_in or int(tts_sr)
+                        sr = self._out_rates.setdefault(sr_in, device_rate(sd, out_dev, "output", sr_in))
+                        rs = None if sr == sr_in else soxr.ResampleStream(sr_in, sr, 1, dtype="float32")
+                        stream = sd.OutputStream(samplerate=sr, channels=1, dtype="float32", device=out_dev)
+                        stream.start()
+                        t["first_play"] = time.perf_counter()
+                    if rs is not None:
+                        wav = rs.resample_chunk(wav)
+                    stream.write(np.ascontiguousarray(wav, dtype=np.float32).reshape(-1, 1))
+                if stream is not None:
+                    if rs is not None:
+                        stream.write(rs.resample_chunk(np.zeros(0, dtype=np.float32), last=True).reshape(-1, 1))
+                    stream.stop()  # 等緩衝區播完
+                    t["play_end"] = time.perf_counter()
+            finally:
+                if stream is not None:
+                    stream.close()
 
+        tts_sr = self.tts_sample_rate
         workers = [threading.Thread(target=_synth), threading.Thread(target=_play)]
         for w in workers:
             w.start()
         t["llm_start"] = time.perf_counter()
         buf = reply = ""
+        first_comma = int(tc.get("first_comma_min_words", 0))
         try:
             for piece in llm.stream_chat(messages, int(lc.get("max_tokens", 96)), float(lc.get("temperature", 0.0)),
                                          lc.get("extra")):
                 reply += piece
-                sents, buf = split_sentences(buf + piece)
+                # 每輪第一段可以在逗號先切（tts.first_comma_min_words），讓 TTS 早點開始
+                sents, buf = split_sentences(buf + piece, 0 if "llm_first_sent" in t else first_comma)
                 for s in sents:
                     t.setdefault("llm_first_sent", time.perf_counter())
                     synth_q.put(s)
@@ -302,21 +361,28 @@ class LiveAssistant:
         stats = llm.last_stats
         if stats.ttft_s is not None:
             t["llm_first_token"] = t["llm_start"] + stats.ttft_s
-        t.update(first_synth=synths[0][2], all_synth=synths[-1][2], first_play=plays[0][0], play_end=plays[-1][1])
+        t["all_synth"] = synths[-1][2]
         tm = turn_timings(t)
         reply_audio = sum(res.audio_s for _, res, _ in synths)
+        tts_total = sum(res.synth_s for _, res, _ in synths)
+        first_tts = synths[0][1].first_chunk_s if self.tts_stream else synths[0][1].synth_s
+        compute = compute_breakdown(vad_s, tm, tts_total)
         tps = stats.tokens_per_s
         print(f"     講完判定 {tm['wait_s']:.2f} s｜STT {tm['stt_s']:.2f} s｜LLM 第一個 token {tm['llm_ttft_s'] or 0:.2f} s、"
               f"第一句 {tm['llm_first_sent_s']:.2f} s（{stats.n_tokens} token，{tps or 0:.1f} token/s）｜"
-              f"TTS 第一句 {synths[0][1].synth_s:.2f} s")
+              f"TTS 第一{'段' if self.tts_stream else '句'} {first_tts:.2f} s")
         print(f"     講完 → 開始出聲 {tm['first_audio_s']:.2f} s｜全部合成完 {tm['all_synth_s']:.2f} s｜"
               f"全部播完 {tm['play_end_s']:.2f} s（回覆 {reply_audio:.1f} s）")
         print(f"     STT 開始 → 開始出聲 {tm['stt_to_first_audio_s']:.2f} s｜全部合成完 {tm['stt_to_all_synth_s']:.2f} s｜"
-              f"全部播完 {tm['stt_to_play_end_s']:.2f} s\n")
+              f"全部播完 {tm['stt_to_play_end_s']:.2f} s")
+        print(f"     整段（講完 → VAD → STT → LLM → TTS 全部合成完）{tm['all_synth_s']:.2f} s，其中等待靜音 "
+              f"{tm['wait_s']:.2f} s｜計算時間合計 {compute['compute_total_s']:.2f} s = VAD {compute['vad_compute_s']:.3f}"
+              f" + STT {tm['stt_s']:.2f} + LLM {tm['llm_total_s']:.2f} + TTS {tts_total:.2f}（LLM 與 TTS 同時進行，"
+              f"合計可大於整段扣掉等待）\n")
         row = {"time": datetime.now().isoformat(timespec="seconds"), "turn": n, "text": text, "reply": reply,
                "reason": r.reason, "speech_sec": round(r.speech_end_sec - r.speech_start_sec, 3), **tm,
                "llm_tokens": stats.n_tokens, "llm_tok_per_s": round(tps, 1) if tps else None,
-               "tts_first_synth_s": synths[0][1].synth_s, "tts_synth_total_s": round(sum(res.synth_s for _, res, _ in synths), 3),
+               "tts_first_synth_s": synths[0][1].synth_s, "tts_stream": self.tts_stream, "tts_first_chunk_s": first_tts, "tts_synth_total_s": round(tts_total, 3), **compute,
                "reply_audio_s": round(reply_audio, 3), "n_chunks": len(synths), "asr": cfg.asr, "llm_model": self.llm_model,
                "tts": tc, "endpoint": self.ep_params}
         if cfg.live.get("save", True):

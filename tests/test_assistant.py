@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from library.runner import load_assistant_config
-from library.runner.assistant import device_rate, split_sentences, turn_timings
+from library.runner.assistant import compute_breakdown, device_rate, split_sentences, turn_timings
 
 
 def test_config_loads_and_overrides_skip_none() -> None:
@@ -33,6 +33,14 @@ def test_split_sentences_streams_complete_sentences() -> None:
     assert split_sentences("It is 3.5 degrees") == ([], "It is 3.5 degrees")  # 小數點後沒有空白，不切
 
 
+def test_split_sentences_first_comma_needs_enough_words() -> None:
+    assert split_sentences("Spring is warm, with rain", 3) == (["Spring is warm,"], "with rain")
+    assert split_sentences("Sure, I will", 3) == ([], "Sure, I will")  # 逗號前只有 1 個字，不切
+    assert split_sentences("Sure, I will remind you, okay", 3) == (["Sure, I will remind you,"], "okay")
+    assert split_sentences("Spring is warm, with rain", 0) == ([], "Spring is warm, with rain")
+    assert split_sentences("Yes it is. Spring is warm, so", 3) == (["Yes it is."], "Spring is warm, so")  # 有完整句子時照句子切
+
+
 def test_turn_timings_relative_to_speech_end_and_stt_start() -> None:
     t = {"speech_end": 10.0, "decided": 11.0, "stt_done": 11.1, "llm_start": 11.1, "llm_first_token": 11.15,
          "llm_first_sent": 11.5, "llm_done": 11.9, "first_synth": 11.85, "all_synth": 12.2, "first_play": 11.86,
@@ -43,6 +51,12 @@ def test_turn_timings_relative_to_speech_end_and_stt_start() -> None:
     assert tm["first_audio_s"] == pytest.approx(1.86) and tm["play_end_s"] == 5.0
     assert tm["stt_to_first_audio_s"] == pytest.approx(0.86) and tm["stt_to_play_end_s"] == 4.0
     assert turn_timings({k: v for k, v in t.items() if k != "llm_first_token"})["llm_ttft_s"] is None
+
+
+def test_compute_breakdown_sums_components() -> None:
+    c = compute_breakdown(0.0123, {"stt_s": 0.1, "llm_total_s": 0.8}, 0.6)
+    assert c == {"vad_compute_s": 0.012, "compute_total_s": 1.512}
+    assert compute_breakdown(0.0, {"stt_s": 0.1, "llm_total_s": None}, 0.0)["compute_total_s"] == 0.1
 
 
 def test_device_rate_falls_back_to_device_default() -> None:

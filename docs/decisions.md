@@ -15,6 +15,19 @@
 
 ---
 
+## 2026-11-04：整段語音助理的 TTS 改用 Pocket TTS 串流服務；第一段逗號先切；講完判定維持 1,000 ms
+- 決定：configs/assistant.yaml 預設 TTS 改為 services/pocket_tts_server（Pocket TTS 100M，GPU 串流，port 8092，聲音 alba）；
+  TTS 協定加上串流（請求 `"stream": true`，ping 回 `"stream": true`），LiveAssistant 改用一條持續寫入的 OutputStream 播放，
+  支援串流時邊合成邊播；新增 `tts.first_comma_min_words: 3`（每輪第一段遇到逗號、前面至少 3 個字就先交給 TTS）。
+  Supertonic 服務保留，可用 `--tts-port 8091 --voice F1` 切回。講完判定的靜音維持 1,000 ms。
+- 理由：Pocket 第一段約 0.12 s（Supertonic 整句 0.33 s 以上）、不會斷音、可懂度相同（TTS Round 2）；整合測試講完到開始出聲
+  1.83 → 1.40 s（同 3 題，含 MAXN_SUPER）。逗號先切只影響第一句有逗號的題目、沒有缺點（Pipeline Round 2）。
+  700 ms 靜音在句中停頓 0.9 s 時截斷率 91%，整段流程 WER 顯著變差（Round 4）。
+- 替代方案：Pocket 裝進專案環境與 granite 共用 CUDA（可省數百 MB，但 pocket-tts 需要 numpy 2，專案是 1.26）；Pocket 放 CPU
+  （板子上 RTF 1.66 以上，會斷音）；Soprano（transformers 後端，RTF 1.41）；Qwen3-TTS（支援中文，0.6B，預期更慢且記憶體放不下）。
+- 影響範圍：services/pocket_tts_server（pyproject.toml、uv.lock、server.py）、library/tts/client.py、library/runner/assistant.py、
+  configs/assistant.yaml；整板記憶體峰值多約 0.2–0.4 GB（剩約 0.7 GB）。
+
 ## 2026-11-03：整段語音助理：LLM 與 TTS 為外部服務，專案內只放 client；新增 library/llm、library/tts、services/
 - 決定：手動實測工具 scripts/10_assistant_live.py（library/runner/assistant.py）串接麥克風 → 講完判斷 → STT → LLM → TTS → 喇叭。
   LLM 用 llama.cpp 的 llama-server（OpenAI 相容 API），TTS 用 services/tts_server（Supertonic 3，自己的 uv 環境，Python 3.12）；

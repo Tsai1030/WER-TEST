@@ -1,5 +1,5 @@
 # 整段語音助理手動實測（scripts/10_assistant_live.py）：麥克風 → 講完判斷 → STT → LLM → TTS → 喇叭
-# LLM（llama-server）與 TTS（services/tts_server）要先另外啟動；預設值為板子上的建議組合（Pipeline Round 1）
+# LLM（llama-server）與 TTS（services/pocket_tts_server）要先另外啟動；預設值為板子上的建議組合（Pipeline Round 1、TTS Round 2）
 name: assistant
 paths:
   out_dir: data/assistant        # 錄音、回覆音檔與紀錄（只放本機，不可公開）
@@ -24,9 +24,10 @@ llm:
 
 tts:
   host: 127.0.0.1
-  port: 8091
-  voice: F1
+  port: 8092                     # Pocket TTS 串流服務（services/pocket_tts_server）；Supertonic（services/tts_server）為 8091、聲音 F1
+  voice: alba                    # Pocket TTS 內建聲音（或服務端的 wav 檔做聲音複製）
   lang: en
+  first_comma_min_words: 3       # 每輪第一段遇到逗號、且前面至少 3 個字就先交給 TTS；0 = 只在句尾切（TTS Round 2）
 
 live:
   input_device: null             # null = 系統預設麥克風；可填 sounddevice 的裝置編號（--list-devices）

@@ -15,6 +15,73 @@
 
 ---
 
+## 2026-11-04：Pipeline Round 2（換成 Pocket TTS 串流的整段流程；25W / MAXN_SUPER；第一段逗號先切）
+- 設定：configs/assistant.yaml（Pocket TTS、port 8092、聲音 alba）、library/runner/assistant.py、services/pocket_tts_server（git commit：待提交）
+- 範圍：板子上用 Pipeline Round 1 的英文問句音檔代替麥克風，跑 LiveAssistant 的每一輪（暫存腳本）：講完判定的等待固定模擬 1.0 秒，
+  播放改成依音訊長度等待（沒有接喇叭）；第 1 輪暖機不計入。granite-470m fp16 GPU → Qwen3-1.7B Q4_K_M（llama-server）→ Pocket TTS 100M GPU 串流
+- 電源：25W（時脈未鎖定）與 MAXN_SUPER（`sudo nvpmodel -m 2` + `sudo jetson_clocks`：CPU 1,728 MHz、GPU 1,020 MHz、記憶體 3,199 MHz）
+
+### 觀察（講完 → 開始出聲，中位數；含模擬的 1.0 秒等待靜音）
+| 設定 | 輪數 | 開始出聲（範圍） | STT | LLM 第一段 | TTS 第一段 | LLM token/s | 整板記憶體峰值 |
+|---|---|---|---|---|---|---|---|
+| Supertonic · 25W · 整句（Pipeline Round 1 整合測試） | 3 | 1.83 s（1.70–1.99） | 0.13 | 0.31 | 0.36 | 28.9 | 6,413 MB（Pipeline Round 1） |
+| Pocket · 25W · 整句 | 7 | 1.67 s（1.45–1.92） | 0.11 | 0.44 | 0.12 | 28.6 | 6,782 MB |
+| Pocket · MAXN_SUPER · 整句 | 9 | 1.49 s（1.31–1.67） | 0.06 | 0.36 | 0.08 | 35.7 | 6,565 MB |
+| **Pocket · MAXN_SUPER · 第一句逗號先切** | 9 | **1.42 s（1.32–1.67）** | 0.06 | 0.28 | 0.08 | 35.8 | 6,591 MB |
+
+- 所有設定播放都沒有中斷（全部播完 − 開始出聲 = 回覆音訊長度）。同樣 3 題：Supertonic 版 1.83 s，建議設定 1.40 s。
+- MAXN_SUPER + jetson_clocks：扣掉等待靜音的計算部分 0.67 → 0.49 s（−27%），STT 0.11 → 0.06 s；溫度約 50°C。
+  25W 時麥克風實測的 STT 偶爾 0.4–1.2 s，推測是閒置降頻（GPU 306 MHz、記憶體 204 MHz）後升頻要時間；鎖定時脈後沒有再出現。
+- 第一段逗號先切（逗號前至少 3 個字）：只有第一句有逗號的題目會變（10 題中 3 題：1.94 → 1.82、1.67 → 1.37、1.67 → 1.62 s），
+  其餘相同。Pipeline Round 1 同樣做法沒效果是因為 Supertonic 每段要 0.3 s 以上；現在 TTS 第一段只要 0.08 s，等 LLM 寫完整句才是瓶頸。
+- 講完判定的靜音不縮短：Round 4 的 700 ms 在句中停頓 0.9 秒時截斷率 91%（1,000 ms 為 4.7%），整段流程 WER 顯著變差（+1.77 個百分點）。
+- 整板記憶體峰值比 Supertonic 版高約 0.2–0.4 GB（剩約 0.7 GB），板子上不要再同時跑其他大程式。
+
+### 結論
+- 預設改為 Pocket TTS 串流 + 第一段逗號先切（configs/assistant.yaml）；板子用 MAXN_SUPER + jetson_clocks 時講完到開始出聲約 1.4 s，
+  其中 1.0 s 是等待靜音、LLM 第一段約 0.3 s、STT 與 TTS 各不到 0.1 s。
+- 限制：合成語音輸入、每組 8–10 題、各跑一次；沒有接麥克風與喇叭；MAXN_SUPER 長時間運作的溫度與耗電沒量。
+
+### 下一步
+- 用麥克風與耳機實測（`--input-device`、`--output-device`）；Pocket TTS 的聽感確認與換聲音。
+
+---
+
+## 2026-11-04：TTS Round 2（串流 TTS：Pocket TTS、Soprano，板子）
+- 設定：暫存腳本（Pocket 整理為 services/pocket_tts_server）
+- 範圍：TTS Round 1 的英文 10 句助理回覆（每組先 2 句暖機）；Pocket TTS 4.0.1（english 100M、english_18m_2026-10，聲音 alba）、
+  Soprano 0.2.0（Soprano-1.1-80M，transformers 後端；lmdeploy 後端板子不能用）；PyTorch 2.15.0+cu132；25W、時脈未鎖定，
+  llama-server 與 Supertonic 服務已載入但閒置
+- 量測：第一段 = 送出文字到收到第一段音訊；RTF = 合成時間 ÷ 音訊長度；斷音 = 第一段一到就開始播、之後某段到達時前面已播完（> 50 ms）；
+  記憶體 = tegrastats 整板峰值 − 啟動前；可懂度 = 開發機 granite-470m 辨識合成語音的 WER
+
+### 觀察
+| 設定 | 第一段（中位數） | RTF | 斷音句數 | 板子記憶體增加 | WER |
+|---|---|---|---|---|---|
+| Supertonic 3 · GPU 補齊（TTS Round 1，整句才出聲） | 0.33 s | 0.09 | — | 948 MB | 1.1% |
+| **Pocket 100M · GPU** | **0.12 s** | **0.60** | **0 / 10** | 1,443 MB | **1.1%** |
+| Pocket 100M · GPU · LLM 同時不停產生文字 | 0.19 s | 1.04 | 1 / 10（63 ms） | 1,524 MB | 1.1% |
+| Pocket 100M · CPU 4 執行緒 | 0.34 s | 1.66 | 10 / 10 | 1,149 MB | 2.2% |
+| Pocket 100M · CPU 1 執行緒（套件預設） | 0.58 s | 2.82 | 10 / 10 | 995 MB | 1.1% |
+| Pocket 18M · CPU 1 執行緒 | 0.23 s | 0.99 | 0 / 10 | 499 MB | 1.1% |
+| Pocket 18M · CPU 4 執行緒 | 0.25 s | 1.09 | 10 / 10 | 640 MB | 1.1% |
+| Pocket 18M · GPU | 0.23 s | 0.86 | 0 / 10 | 1,179 MB | 1.1% |
+| Soprano 80M · GPU | 0.45 s | 1.41 | 10 / 10 | 1,675 MB | 4.4% |
+| Soprano 80M · CPU 4 執行緒（2 句後停止） | 1.19 s | 3.84 | 2 / 2 | 649 MB | — |
+
+- 所有設定唯一共同的辨識錯誤是 three thirty 被寫成 3.30（數字格式）。Soprano 第 1 句（"I'm here, I'm here."）產生 32 秒的幻覺。
+- 板子 CPU 太弱：Pocket 100M 在 CPU 上都比播放慢；pocket_tts 在 import 時把 PyTorch 執行緒設為 1，要在載入後再設。
+- Pocket 用 GPU 時 PyTorch 實際配置約 486 MB，板子記憶體增加多出來的部分是 PyTorch 與 CUDA 函式庫本身；18M 在 GPU 上反而比 100M 慢
+  （CPU 送 GPU 指令的負擔為主）。
+- Soprano 與 Qwen3-TTS 一樣要用 transformers 逐 token 產生，速度被板子 CPU 拖住（同 Pipeline Round 1 的 LLM）；Qwen3-TTS（0.6B）未測。
+- Pocket 不能裝進專案環境（需要 numpy 2，專案是 1.26），改為外部服務（services/pocket_tts_server，協定加上串流）。
+
+### 結論
+- TTS 改用 Pocket TTS 100M（GPU、串流）：第一段約 0.12 s，比 Supertonic 快約 2.7 倍；記憶體多約 0.5 GB。
+- 限制：只測英文 10 句、預設聲音；音質只量可懂度，聽感還沒評；都不支援中文。
+
+---
+
 ## 2026-11-03：Pipeline Round 1（STT → LLM → TTS 整段流程，板子 GPU）
 - 設定：暫存腳本（之後整理為 configs/assistant.yaml、library/runner/assistant.py、scripts/10_assistant_live.py）
 - 範圍：英文 10 題助理問句（Supertonic M2 聲音合成、重取樣成 16 kHz）+ 1 題暖機；7 組設定，每組在新的程式中從閒置開始量
